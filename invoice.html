@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="Expires" content="0">
+    <title>Invoice Notaris PPAT (Server Terpusat)</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background-color: #f4f7f6; display: flex; height: 100vh; overflow: hidden; }
+        
+        .left-panel { width: 45%; background: #ffffff; padding: 25px; overflow-y: auto; border-right: 1px solid #ccc; box-shadow: 2px 0 10px rgba(0,0,0,0.1); z-index: 10; position: relative;}
+        .right-panel { width: 55%; padding: 40px 20px; display: flex; justify-content: center; align-items: flex-start; overflow-y: auto; background-color: #525659; }
+
+        h2 { margin-top: 0; color: #2c3e50; font-size: 18px; border-bottom: 2px solid #3498db; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center;}
+        
+        .db-controls { display: flex; gap: 10px; margin-bottom: 15px; }
+        .btn-db { padding: 10px 15px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; color: white; flex: 1; font-size: 13px; transition: 0.2s;}
+        .btn-save { background: #2980b9; } .btn-save:hover { background: #2471a3; }
+        .btn-load { background: #8e44ad; } .btn-load:hover { background: #732d91; }
+        .btn-new { background: #f39c12; } .btn-new:hover { background: #e67e22; }
+
+        .section-title { background: #ecf0f1; padding: 10px; font-weight: bold; font-size: 14px; margin: 20px 0 15px; border-left: 4px solid #3498db; display: flex; justify-content: space-between; align-items: center;}
+        
+        .form-group { margin-bottom: 15px; }
+        .form-row { display: flex; gap: 15px; margin-bottom: 15px; align-items: flex-end;}
+        .form-row > div { flex: 1; }
+
+        label { display: block; font-size: 13px; font-weight: bold; color: #34495e; margin-bottom: 5px; }
+        input[type="text"], input[type="number"], input[type="date"], select { width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 4px; box-sizing: border-box; font-size: 14px; background-color: #fff; }
+        
+        .cost-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; background: #fdfdfd; padding: 10px; border: 1px solid #e0e0e0; border-radius: 5px;}
+        .c-name { flex: 2; }
+        .c-price { flex: 1.5; font-weight: bold; color: #27ae60;}
+        .c-dist { flex: 1.2; }
+        .btn-del { background: #e74c3c; color: white; border: none; padding: 10px 14px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-add { background: #3498db; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;}
+        
+        .toggle-box { background: #e8f4f8; padding: 15px; border-radius: 6px; border: 1px solid #bce8f1; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; font-weight: bold; color: #31708f; cursor: pointer;}
+        .toggle-box input { width: 20px; height: 20px; cursor: pointer; }
+
+        .btn-export { background: #27ae60; color: white; border: none; padding: 15px; width: 100%; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 30px; position: sticky; bottom: 0; transition: 0.2s; box-shadow: 0 -4px 15px rgba(0,0,0,0.15); z-index: 100;}
+        
+        #history-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 999; justify-content: center; align-items: center; }
+        .modal-content { background: white; width: 80%; max-width: 800px; max-height: 80vh; border-radius: 8px; padding: 25px; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; margin-bottom: 20px; }
+        .modal-close { background: #e74c3c; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        
+        table.db-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        table.db-table th, table.db-table td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        table.db-table th { background: #34495e; color: white; }
+        .btn-edit { background: #f39c12; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .btn-delete { background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+
+        /* KERTAS A4: AUTO-SCALING */
+        .a4-paper { 
+            --base-font: 12pt; 
+            width: 210mm; 
+            height: 297mm; 
+            background: white; 
+            padding: 40px 50px; 
+            box-sizing: border-box; 
+            box-shadow: 0 5px 25px rgba(0,0,0,0.4); 
+            font-family: Arial, Helvetica, sans-serif; 
+            font-size: var(--base-font); 
+            color: black; 
+            line-height: 1.4; 
+            flex-shrink: 0; 
+            margin-bottom: 40px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .kop-surat { text-align: center; font-family: 'Times New Roman', Times, serif; margin-bottom: 15px; }
+        .kop-title { font-weight: bold; font-size: calc(var(--base-font) + 2pt); margin: 0; letter-spacing: 1px; }
+        .kop-name { font-weight: bold; font-size: calc(var(--base-font) + 8pt); margin: 5px 0; }
+        .kop-address { font-size: var(--base-font); margin: 0; }
+        
+        .invoice-title { text-align: center; font-weight: bold; font-size: var(--base-font); margin-top: 5px; margin-bottom: 2px;}
+        .invoice-number { text-align: center; margin-bottom: 15px; font-weight: bold; font-size: var(--base-font);}
+        
+        .bg-green { background-color: #c2d69b; padding: 6px 8px; font-weight: bold; margin-bottom: 15px; font-size: calc(var(--base-font) - 1pt);}
+        .bg-yellow { background-color: #ffff00; padding: 4px 8px; font-weight: bold; display: inline-block; margin-bottom: 10px; margin-top: 5px; font-size: calc(var(--base-font) - 1pt);}
+        .bg-orange { background-color: #ffc000; padding: 6px 12px; font-weight: bold; margin-top: 15px; font-size: calc(var(--base-font) - 1pt);}
+        
+        .text-red { color: #ff0000; font-weight: bold; font-style: italic; text-align: left; font-size: calc(var(--base-font) - 1pt); padding-left: 30px;}
+        
+        .cost-table { width: 100%; border-collapse: collapse; margin-bottom: 5px; font-size: var(--base-font);}
+        .cost-table td { padding: 4px 0; vertical-align: middle; }
+        .col-bullet { width: 4%; text-align: center; font-weight: bold; }
+        .col-name { width: 40%; }
+        .col-eq { width: 4%; text-align: center; }
+        .col-cur { width: 4%; text-align: left; }
+        .col-amt { width: 18%; text-align: right; font-weight: bold; }
+        .col-brace { width: 4%; text-align: center; font-size: 3em; font-weight: 300; line-height: 0.1; color: #333;}
+        .col-lbl { width: 26%; }
+        
+        .signature-area { margin-top: 20px; width: 100%; display: flex; justify-content: flex-end; font-size: calc(var(--base-font) - 1pt);}
+        .signature-box { text-align: center; width: 220px; line-height: 1.4;}
+        .bank-info { margin-top: auto; font-size: calc(var(--base-font) - 1pt); font-weight: bold; line-height: 1.4; padding-top: 10px;}
+    </style>
+</head>
+<body>
+
+<div class="left-panel">
+    <h2>
+        <span>⚙️ Sistem Invoice Dinamis</span>
+        <span id="status-db" style="font-size: 12px; color: #e67e22; background: #fdf2e9; padding: 4px 8px; border-radius: 4px; display: none;">Mengedit Mode...</span>
+    </h2>
+
+    <div class="db-controls">
+        <button class="btn-db btn-new" onclick="newInvoice()">📄 Buat Baru</button>
+        <button class="btn-db btn-save" onclick="saveToDatabase()">💾 Simpan ke Server MySQL</button>
+        <button class="btn-db btn-load" onclick="openHistoryModal()">📂 Buka Riwayat Server</button>
+    </div>
+
+    <div class="section-title" style="background-color: #dbeafe; border-left-color: #2563eb;">Mode Operasional</div>
+    <div class="form-group">
+        <select id="in-mode" style="border: 2px solid #2563eb; font-weight: bold; color: #1e3a8a;" onchange="toggleModeLayanan()">
+            <option value="AJB">A. Proses Jual Beli / Hibah (Perhitungan Pajak)</option>
+            <option value="UMUM">B. Layanan Umum (Waris, Pecah, PT/CV, Roya, dll - Tanpa Pajak)</option>
+        </select>
+    </div>
+
+    <div id="panel-kesepakatan">
+        <label class="toggle-box">
+            <input type="checkbox" id="toggle-beban" checked onchange="updatePreview()">
+            Mode Kesepakatan (Tampilkan Beban Penjual/Pembeli)
+        </label>
+    </div>
+    
+    <div class="section-title">Informasi Dasar</div>
+    <div class="form-group"><label>No. Invoice</label><input type="text" id="in-no" value="" oninput="updatePreview()"></div>
+    <div class="form-group"><label>Tanggal Invoice</label><input type="text" id="in-tgl" value="" oninput="updatePreview()"></div>
+    
+    <div class="form-row">
+        <div style="flex: 2;"><label id="lbl-shm">Nomor / Keterangan SHM</label><input type="text" id="in-shm" value="" oninput="updatePreview()"></div>
+        <div style="flex: 1;"><label id="lbl-luas">Luas (M2)</label><input type="text" id="in-luas" value="" oninput="formatStaticCurrency(this)"></div>
+    </div>
+
+    <div class="form-row">
+        <div><label id="lbl-penjual">Nama Penjual</label><input type="text" id="in-penjual" value="" oninput="updatePreview()"></div>
+        <div><label id="lbl-pembeli">Nama Pembeli</label><input type="text" id="in-pembeli" value="" oninput="updatePreview()"></div>
+    </div>
+    
+    <div id="panel-pajak">
+        <div class="section-title">Nilai Transaksi & Dasar Pajak</div>
+        <div class="form-row">
+            <div><label>Transaksi Riil (Rp)</label><input type="text" id="in-riil" value="" oninput="formatStaticCurrency(this)"></div>
+            <div><label>Dasar Pajak / Estimasi (Rp)</label><input type="text" id="in-dpp" value="" oninput="formatStaticCurrency(this)"></div>
+        </div>
+        <div class="form-group"><label>NPOPTKP Pembeli (Rp) - Isi 0 jika Progresif</label><input type="text" id="in-npoptkp" value="60.000.000" oninput="formatStaticCurrency(this)"></div>
+    </div>
+
+    <div class="section-title">
+        <span>Daftar Rincian Biaya Notaris</span>
+        <button class="btn-add" onclick="addCostItem()">+ Tambah Biaya</button>
+    </div>
+    <div id="dynamic-costs-container"></div>
+
+    <button class="btn-export" onclick="exportPDF()">📥 Download PDF & Simpan</button>
+</div>
+
+<div id="history-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>📂 Riwayat Server Terpusat (MySQL)</h2>
+            <button class="modal-close" onclick="closeHistoryModal()">Tutup ✖</button>
+        </div>
+        <table class="db-table">
+            <thead>
+                <tr>
+                    <th>No. Invoice</th>
+                    <th>Nama Pihak</th>
+                    <th>Tanggal Simpan</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="db-table-body">
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="right-panel">
+    <div class="a4-paper" id="invoice-paper">
+        <div id="content-wrapper" style="width: 100%;">
+            
+            <div class="kop-surat">
+                <div class="kop-title">NOTARIS - PEJABAT PEMBUAT AKTA TANAH</div>
+                <div class="kop-name">ENDRI PURWANI, S.H., M.Kn.</div>
+                <div class="kop-address">Jl. Palagan Tentara Pelajar Km. 8,5 No. 119<br>Telp. (0274) 4532737 / 087739207960<br>SLEMAN YOGYAKARTA 55581</div>
+            </div>
+
+            <div class="invoice-title">INVOICE BIAYA</div>
+            <div class="invoice-number">NOMOR : <span id="out-no"></span></div>
+
+            <div class="bg-green">
+                <div id="out-shm-row"><span id="out-shm"></span></div>
+                <div>ATAS NAMA <span id="out-nama"></span></div>
+                <div id="out-riil-row">TRANSAKSI RIIL Rp. <span id="out-riil"></span></div>
+            </div>
+
+            <div class="bg-yellow" id="out-judul-rincian">A. PROSES PERALIHAN HAK</div>
+            <table class="cost-table">
+                <tbody id="out-cost-body"></tbody>
+                <tr style="background-color: #ffff00; font-weight: bold;">
+                    <td></td>
+                    <td style="text-align: center; padding: 4px 0;">TOTAL BIAYA</td>
+                    <td></td>
+                    <td>Rp</td>
+                    <td style="text-align: right;" id="out-total-biaya"></td>
+                    <td colspan="2" style="background-color: white;"></td>
+                </tr>
+            </table>
+
+            <div id="render-pajak-section">
+                <div class="bg-yellow" style="margin-top: 10px;">B. ESTIMASI PAJAK Rp. <span id="out-dpp-per-meter">0</span>/m2 x <span id="out-luas">0</span> m2 = Rp. <span id="out-dpp-label"></span></div>
+                <table class="cost-table" style="margin-top: 5px;">
+                    <tr>
+                        <td class="col-bullet">-</td>
+                        <td class="col-name" style="width: 45%;">PPH (PAJAK PENJUAL)<br>Rp. <span id="out-dpp-label-2"></span> x 2,5%</td>
+                        <td class="col-eq">=</td>
+                        <td class="col-cur">Rp</td>
+                        <td class="col-amt" id="out-pph"></td>
+                        <td colspan="2"></td>
+                    </tr>
+                    <tr>
+                        <td class="col-bullet">-</td>
+                        <td class="col-name" style="width: 45%;">BPHTB (PAJAK PEMBELI)<br>Rp. <span id="out-dpp-label-3"></span> - <span id="out-npoptkp-label"></span> x 5%</td>
+                        <td class="col-eq">=</td>
+                        <td class="col-cur">Rp</td>
+                        <td class="col-amt" id="out-bphtb"></td>
+                        <td colspan="2"></td>
+                    </tr>
+                </table>
+
+                <div id="summary-box" style="display: block;">
+                    <div class="bg-orange">
+                        <div>TOTAL PENJUAL = Rp. <span id="out-total-penjual"></span></div>
+                        <div style="font-size: calc(var(--base-font) - 2pt); font-weight: normal; margin-top: 2px;">( <span id="out-rincian-penjual"></span> )</div>
+                    </div>
+                    <div class="bg-orange" style="margin-top: 10px;">
+                        <div>TOTAL PEMBELI = Rp. <span id="out-total-pembeli"></span></div>
+                        <div style="font-size: calc(var(--base-font) - 2pt); font-weight: normal; margin-top: 2px;">( <span id="out-rincian-pembeli"></span> )</div>
+                    </div>
+                </div>
+
+                <div class="bg-green" style="margin-top: 15px; font-style: italic; line-height: 1.3;">
+                    NB : - JIKA PNBP DAN PAJAK KURANG BAYAR, SIAP UNTUK MEMBAYAR<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; - JIKA PENERIMA SUDAH MELAKUKAN PERALIHAN HAK DI TAHUN YANG<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SAMA, MAKA PAJAK BPHTB MENJADI PROGRESIF (TIDAK ADA<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PENGURANGAN NPOPTKP)
+                </div>
+            </div>
+
+            <div class="signature-area">
+                <div class="signature-box">
+                    Sleman, <span id="out-tgl">.............................</span><br>
+                    Notaris - PPAT<br>Kabupaten Sleman<br><br><br><br>
+                    <span style="text-decoration: underline; font-weight: bold;">ENDRI PURWANI, S.H., M.Kn</span>
+                </div>
+            </div>
+
+        </div> 
+
+        <div class="bank-info">
+            TRANSFER BANK :<br>
+            - BANK BCA KCP GEJAYAN : 4564 7958 97 an. ENDRI PURWANI<br>
+            - BANK MANDIRI KCP YOGYAKARTA DIPONEGORO : 137.00.1172020.4 an. ENDRI PURWANI<br>
+            - BANK BNI KCP UGM YOGYA : 0721048251 an. Ibu ENDRI PURWANI
+        </div>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // SISTEM MEMORI GANDA (DUAL CACHE)
+    // ==========================================
+    let cacheAJB = [
+        { name: "AKTA JUAL BELI", price: "", dist: "kosong" },
+        { name: "BALIK NAMA", price: "", dist: "kosong" },
+        { name: "PNBP", price: "", dist: "kosong" },
+        { name: "CEK SERTIFIKAT", price: "", dist: "kosong" },
+        { name: "ADMINISTRASI DAN MATERAI", price: "", dist: "kosong" }
+    ];
+    let cacheUMUM = [
+        { name: "", price: "", dist: "kosong" }
+    ];
+    
+    let costItems = cacheAJB;
+    let currentInvoiceId = null;
+    
+    // Objek pengaman JSON parsial agar tombol Edit di riwayat tidak rusak
+    window.historyCache = {}; 
+
+    // ==========================================
+    // SISTEM DOM MANIPULATION & STATE MANAGEMENT
+    // ==========================================
+    function toggleModeLayanan() {
+        const mode = document.getElementById('in-mode').value;
+        const panelPajak = document.getElementById('panel-pajak');
+        const panelKesepakatan = document.getElementById('panel-kesepakatan');
+        const renderPajakSection = document.getElementById('render-pajak-section');
+
+        if (mode === 'AJB') {
+            panelPajak.style.display = 'block';
+            panelKesepakatan.style.display = 'block';
+            renderPajakSection.style.display = 'block';
+            
+            document.getElementById('lbl-penjual').innerText = 'Nama Penjual / Pemberi';
+            document.getElementById('lbl-pembeli').innerText = 'Nama Pembeli / Penerima';
+            document.getElementById('out-judul-rincian').innerText = 'A. PROSES PERALIHAN HAK';
+            document.getElementById('out-riil-row').style.display = 'block';
+            
+            // Pindahkan laci memori ke template AJB
+            costItems = cacheAJB;
+        } else {
+            panelPajak.style.display = 'none';
+            panelKesepakatan.style.display = 'none';
+            renderPajakSection.style.display = 'none';
+            
+            document.getElementById('lbl-penjual').innerText = 'Klien Utama / Instansi';
+            document.getElementById('lbl-pembeli').innerText = 'Klien Tambahan (Kosongkan jika tdk ada)';
+            document.getElementById('out-judul-rincian').innerText = 'RINCIAN BIAYA PROSES';
+            document.getElementById('out-riil-row').style.display = 'none';
+            
+            // Pindahkan laci memori ke template Kosong (Umum)
+            costItems = cacheUMUM;
+        }
+
+        renderInputForm();
+        updatePreview();
+    }
+
+    // ==========================================
+    // SISTEM DATABASE SERVER (MySQL via PHP)
+    // ==========================================
+    async function saveToDatabase(isSilent = false) {
+        const invoiceData = {
+            id: currentInvoiceId,
+            mode_layanan: document.getElementById('in-mode').value,
+            no_invoice: document.getElementById('in-no').value,
+            tgl: document.getElementById('in-tgl').value,
+            shm: document.getElementById('in-shm').value,
+            luas: document.getElementById('in-luas').value,
+            penjual: document.getElementById('in-penjual').value,
+            pembeli: document.getElementById('in-pembeli').value,
+            riil: document.getElementById('in-riil').value,
+            dpp: document.getElementById('in-dpp').value,
+            npoptkp: document.getElementById('in-npoptkp').value,
+            mode_beban: document.getElementById('toggle-beban').checked,
+            cost_items: costItems,
+            timestamp: new Date().toLocaleString('id-ID')
+        };
+
+        try {
+            const response = await fetch('api_invoice.php?action=save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(invoiceData)
+            });
+            
+            const res = await response.json();
+            
+            if (res.status === 'success') {
+                currentInvoiceId = res.id; 
+                document.getElementById('status-db').style.display = 'inline-block';
+                document.getElementById('status-db').innerText = "Tersimpan di MySQL (ID: " + currentInvoiceId + ")";
+                
+                if (window.parent && window.parent.saveToMasterDB) {
+                    let p1 = document.getElementById('in-penjual').value.trim();
+                    let p2 = document.getElementById('in-pembeli').value.trim();
+                    let pihakKlien = p2 ? `${p1} & ${p2}` : p1;
+                    window.parent.saveToMasterDB('INVOICE', document.getElementById('in-no').value, pihakKlien);
+                }
+
+                if(!isSilent) alert("✅ DNA Invoice berhasil disimpan secara permanen di Server MySQL!");
+            } else {
+                alert("❌ Gagal menyimpan ke server: " + res.pesan);
+            }
+        } catch (error) {
+            console.error(error);
+            alert("❌ Koneksi ke Server Intranet terputus. Pastikan XAMPP Apache/MySQL menyala.");
+        }
+    }
+
+    async function openHistoryModal() {
+        document.getElementById('history-modal').style.display = 'flex';
+        const tbody = document.getElementById('db-table-body');
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Menyedot data dari Server MySQL...</td></tr>';
+
+        try {
+            const response = await fetch('api_invoice.php?action=load');
+            const data = await response.json();
+            
+            tbody.innerHTML = '';
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Belum ada arsip di Server MySQL.</td></tr>';
+                return;
+            }
+
+            data.forEach(inv => {
+                let jsonData = inv.data_json;
+                
+                // MENGAMANKAN DATA KE DALAM RAM OBJEK (Mencegah HTML Error saat render tombol)
+                window.historyCache[inv.id] = jsonData;
+
+                let namaPihak = inv.nama_pihak || "Kosong";
+                let waktuSimpan = jsonData.timestamp || "-";
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${inv.no_invoice || 'Tanpa Nomor'}</strong></td>
+                        <td>${namaPihak}</td>
+                        <td style="color:#7f8c8d; font-size:12px;">${waktuSimpan}</td>
+                        <td>
+                            <button class="btn-edit" onclick="loadInvoice(${inv.id})">✏️ Buka</button>
+                            <button class="btn-delete" onclick="deleteInvoice(${inv.id})">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        } catch (error) {
+            console.error(error);
+            tbody.innerHTML = '<tr><td colspan="4" style="color:red; text-align:center;">Gagal terhubung ke Server MySQL.</td></tr>';
+        }
+    }
+
+    function closeHistoryModal() {
+        document.getElementById('history-modal').style.display = 'none';
+    }
+
+    function loadInvoice(id) {
+        // Ambil data utuh dari RAM browser berdasarkan ID
+        const data = window.historyCache[id];
+        if(!data) return;
+
+        // Memasukkan data ke dalam laci (cache) yang tepat sesuai modenya
+        if (data.mode_layanan === 'UMUM') {
+            cacheUMUM = data.cost_items;
+        } else {
+            cacheAJB = data.cost_items;
+        }
+
+        // Panggil fungsi toggle yang otomatis akan memindahkan pointer costItems ke laci yang benar
+        document.getElementById('in-mode').value = data.mode_layanan || 'AJB';
+        toggleModeLayanan();
+
+        document.getElementById('in-no').value = data.no_invoice || "";
+        document.getElementById('in-tgl').value = data.tgl || "";
+        document.getElementById('in-shm').value = data.shm || "";
+        document.getElementById('in-luas').value = data.luas || "";
+        document.getElementById('in-penjual').value = data.penjual || "";
+        document.getElementById('in-pembeli').value = data.pembeli || "";
+        document.getElementById('in-riil').value = data.riil || "";
+        document.getElementById('in-dpp').value = data.dpp || "";
+        document.getElementById('in-npoptkp').value = data.npoptkp || "";
+        document.getElementById('toggle-beban').checked = data.mode_beban;
+
+        currentInvoiceId = id;
+
+        document.getElementById('status-db').style.display = 'inline-block';
+        document.getElementById('status-db').innerText = "Mengedit Data MySQL (ID: " + currentInvoiceId + ")";
+
+        renderInputForm();
+        closeHistoryModal();
+        alert("📂 DNA Invoice berhasil dipanggil dari Server MySQL. Siap untuk diedit!");
+    }
+
+    async function deleteInvoice(id) {
+        if(!confirm("Anda yakin ingin membakar arsip invoice ini secara permanen dari Server Utama?")) return;
+        
+        try {
+            const response = await fetch(`api_invoice.php?action=delete&id=${id}`);
+            const res = await response.json();
+            if(res.status === 'success') {
+                if(currentInvoiceId === id) newInvoice(); 
+                openHistoryModal(); 
+            } else {
+                alert("Gagal menghapus data dari server.");
+            }
+        } catch(err) {
+            alert("Koneksi terputus.");
+        }
+    }
+
+    async function newInvoice() {
+        if(!confirm("Buat dokumen baru? Form saat ini akan dibersihkan.")) return;
+        
+        // HAPUS logika fetch nomor terakhir di sisi klien untuk mencegah Race Condition.
+        // Biarkan backend (MySQL) yang menangani Auto-Increment secara absolut.
+
+        // Bersihkan laci cache dengan data segar
+        cacheAJB = [
+            { name: "AKTA JUAL BELI", price: "", dist: "kosong" },
+            { name: "BALIK NAMA", price: "", dist: "kosong" },
+            { name: "PNBP", price: "", dist: "kosong" },
+            { name: "CEK SERTIFIKAT", price: "", dist: "kosong" },
+            { name: "ADMINISTRASI DAN MATERAI", price: "", dist: "kosong" }
+        ];
+        cacheUMUM = [
+            { name: "", price: "", dist: "kosong" }
+        ];
+
+        document.getElementById('in-mode').value = 'AJB';
+        toggleModeLayanan();
+
+        // Beri indikator visual bahwa nomor akan dibuat otomatis oleh server
+        document.getElementById('in-no').value = "AUTO-GENERATE";
+        
+        document.getElementById('in-tgl').value = "";
+        document.getElementById('in-shm').value = "";
+        document.getElementById('in-luas').value = "";
+        document.getElementById('in-penjual').value = "";
+        document.getElementById('in-pembeli').value = "";
+        document.getElementById('in-riil').value = "";
+        document.getElementById('in-dpp').value = "";
+        document.getElementById('in-npoptkp').value = "60.000.000";
+        document.getElementById('status-db').style.display = 'none';
+
+        currentInvoiceId = null;
+        renderInputForm();
+    }
+
+
+    // ==========================================
+    // SISTEM RENDER PDF & UI 
+    // ==========================================
+
+    function rp(num) { 
+        if(isNaN(num) || num === "" || num === 0) return "0";
+        return new Intl.NumberFormat('id-ID').format(Math.round(Math.max(0, num))); 
+    }
+
+    function getNumVal(id) {
+        let el = document.getElementById(id);
+        if(!el) return 0;
+        let val = el.value.replace(/[^0-9]/g, '');
+        return val !== "" ? parseInt(val) : 0;
+    }
+
+    function formatStaticCurrency(input) {
+        let val = input.value.replace(/[^0-9]/g, '');
+        if (val !== "") input.value = new Intl.NumberFormat('id-ID').format(parseInt(val));
+        else input.value = "";
+        updatePreview();
+    }
+
+    function formatDynamicCurrency(input, index) {
+        let val = input.value.replace(/[^0-9]/g, '');
+        if(val !== "") {
+            input.value = new Intl.NumberFormat('id-ID').format(parseInt(val));
+            costItems[index].price = parseInt(val);
+        } else {
+            input.value = "";
+            costItems[index].price = "";
+        }
+        updatePreview();
+    }
+
+    function renderInputForm() {
+        const container = document.getElementById('dynamic-costs-container');
+        container.innerHTML = '';
+        const isUmum = document.getElementById('in-mode').value === 'UMUM';
+
+        costItems.forEach((item, index) => {
+            let formattedPrice = item.price ? new Intl.NumberFormat('id-ID').format(item.price) : "";
+            
+            // Sembunyikan Opsi Distribusi jika Mode Umum
+            let selectDist = isUmum ? `<select class="c-dist" style="display:none;" onchange="updateItemDist(${index}, this.value)"><option value="kosong" selected></option></select>` : `
+                <select class="c-dist" onchange="updateItemDist(${index}, this.value)">
+                    <option value="kosong" ${item.dist === 'kosong' ? 'selected' : ''}>Polosan</option>
+                    <option value="bagi2" ${item.dist === 'bagi2' ? 'selected' : ''}>Dibagi 2</option>
+                    <option value="pembeli" ${item.dist === 'pembeli' ? 'selected' : ''}>Pembeli</option>
+                    <option value="penjual" ${item.dist === 'penjual' ? 'selected' : ''}>Penjual</option>
+                </select>
+            `;
+
+            container.innerHTML += `
+                <div class="cost-row">
+                    <input type="text" class="c-name" value="${item.name}" placeholder="Ketik rincian biaya..." oninput="updateItemName(${index}, this.value)">
+                    <input type="text" class="c-price" value="${formattedPrice}" placeholder="0" oninput="formatDynamicCurrency(this, ${index})">
+                    ${selectDist}
+                    <button class="btn-del" onclick="removeCostItem(${index})">✖</button>
+                </div>
+            `;
+        });
+        updatePreview();
+    }
+
+    function updateItemName(index, value) { costItems[index].name = value; updatePreview(); }
+    function updateItemDist(index, value) { costItems[index].dist = value; updatePreview(); }
+    function addCostItem() { costItems.push({ name: "", price: "", dist: "kosong" }); renderInputForm(); }
+    function removeCostItem(index) { costItems.splice(index, 1); renderInputForm(); }
+
+    function autoScaleFont() {
+        const paper = document.getElementById('invoice-paper');
+        const content = document.getElementById('content-wrapper');
+        const bankInfo = document.querySelector('.bank-info');
+        
+        let fontSize = 12; 
+        paper.style.setProperty('--base-font', fontSize + 'pt');
+
+        while ((content.scrollHeight + bankInfo.scrollHeight + 50) > paper.clientHeight && fontSize > 7) {
+            fontSize -= 0.5;
+            paper.style.setProperty('--base-font', fontSize + 'pt');
+        }
+    }
+
+    function updatePreview() {
+        const mode = document.getElementById('in-mode').value;
+        const isModeBebanAktif = document.getElementById('toggle-beban').checked && mode === 'AJB';
+
+        document.getElementById('out-no').innerText = document.getElementById('in-no').value || ".............................";
+        document.getElementById('out-tgl').innerText = document.getElementById('in-tgl').value || ".............................";
+        
+        let shmInput = document.getElementById('in-shm').value.toUpperCase();
+        let luasInput = getNumVal('in-luas');
+        
+        if (mode === 'AJB') {
+            document.getElementById('out-shm').innerText = `SHM NO. ${shmInput || "........................................."}, LUAS : ${luasInput > 0 ? rp(luasInput) : "...."} M2`;
+        } else {
+            // Pada mode UMUM, render apa adanya teks di kolom keterangan
+            document.getElementById('out-shm').innerText = shmInput || ".........................................";
+            if (luasInput > 0) {
+                 document.getElementById('out-shm').innerText += `, LUAS : ${rp(luasInput)} M2`;
+            }
+        }
+
+        let penjual = document.getElementById('in-penjual').value.toUpperCase() || "............................";
+        let pembeli = document.getElementById('in-pembeli').value.toUpperCase();
+        
+        if (pembeli === "") {
+            document.getElementById('out-nama').innerText = penjual;
+        } else {
+            document.getElementById('out-nama').innerText = `${penjual} + ${pembeli}`;
+        }
+        
+        let riil = getNumVal('in-riil');
+        let dpp = getNumVal('in-dpp');
+        
+        let npoptkpInputStr = document.getElementById('in-npoptkp').value.replace(/[^0-9]/g, '');
+        let npoptkp = npoptkpInputStr === "" ? 0 : parseInt(npoptkpInputStr);
+        
+        document.getElementById('out-riil').innerText = rp(riil);
+        document.getElementById('out-dpp-label').innerText = rp(dpp);
+        document.getElementById('out-dpp-label-2').innerText = rp(dpp);
+        document.getElementById('out-dpp-label-3').innerText = rp(dpp);
+        
+        document.getElementById('out-npoptkp-label').innerText = npoptkpInputStr === "" ? "0" : rp(npoptkp); 
+
+        document.getElementById('out-luas').innerText = luasInput || "0";
+        document.getElementById('out-dpp-per-meter').innerText = luasInput > 0 ? rp(dpp / luasInput) : "0";
+
+        let pph = dpp * 0.025; 
+        let bphtb = Math.max(0, (dpp - npoptkp)) * 0.05; 
+        document.getElementById('out-pph').innerText = rp(pph);
+        document.getElementById('out-bphtb').innerText = rp(bphtb);
+
+        const tbody = document.getElementById('out-cost-body');
+        tbody.innerHTML = '';
+        
+        let totalBiaya = 0;
+        let bebanPenjual = pph; 
+        let bebanPembeli = bphtb; 
+        
+        let textPenjualArr = [];
+        let textPembeliArr = [];
+        let groups = [];
+
+        costItems.forEach((item) => {
+            let actualPrice = item.price || 0;
+            totalBiaya += actualPrice;
+
+            let labelCetak = "";
+            let shortName = item.name.toUpperCase();
+            if(shortName === "AKTA JUAL BELI") shortName = "AJB";
+            else if(shortName === "BALIK NAMA") shortName = "BN";
+            else if(shortName === "ADMINISTRASI DAN MATERAI" || shortName === "ADMINISTRASI & MATERAI") shortName = "Admin";
+            else if(shortName === "CEK SERTIFIKAT") shortName = "Cek";
+
+            if (isModeBebanAktif && actualPrice > 0) {
+                if (item.dist === 'bagi2') {
+                    bebanPenjual += actualPrice / 2; bebanPembeli += actualPrice / 2;
+                    labelCetak = "dibagi 2";
+                    textPenjualArr.push("½ " + shortName); textPembeliArr.push("½ " + shortName);
+                } else if (item.dist === 'pembeli') {
+                    bebanPembeli += actualPrice; labelCetak = "pembeli"; textPembeliArr.push(shortName);
+                } else if (item.dist === 'penjual') {
+                    bebanPenjual += actualPrice; labelCetak = "penjual"; textPenjualArr.push(shortName);
+                }
+            } else if (isModeBebanAktif && actualPrice === 0) {
+                 if (item.dist === 'bagi2') labelCetak = "dibagi 2";
+                 else if (item.dist === 'pembeli') labelCetak = "pembeli";
+                 else if (item.dist === 'penjual') labelCetak = "penjual";
+            }
+
+            if (groups.length > 0 && groups[groups.length - 1].label === labelCetak && labelCetak !== "") {
+                groups[groups.length - 1].items.push({ ...item, actualPrice });
+            } else {
+                groups.push({ label: labelCetak, items: [{ ...item, actualPrice }] });
+            }
+        });
+
+        groups.forEach(group => {
+            group.items.forEach((item, index) => {
+                let tr = document.createElement('tr');
+                
+                // Mencegah sel tabel menyusut jika nama biaya masih dikosongkan
+                let cetakNama = item.name || '&nbsp;';
+                let cetakHarga = item.price ? rp(item.actualPrice) : '';
+
+                let html = `
+                    <td class="col-bullet">-</td>
+                    <td class="col-name">${cetakNama}</td>
+                    <td class="col-eq">=</td>
+                    <td class="col-cur">Rp</td>
+                    <td class="col-amt">${cetakHarga}</td>
+                `;
+
+                if (index === 0) {
+                    if (group.label === "") {
+                        html += `<td colspan="2" class="col-lbl"></td>`;
+                    } else if (group.items.length === 1) {
+                        html += `<td colspan="2" class="col-lbl"><span class="text-red">${group.label}</span></td>`;
+                    } else {
+                        html += `<td class="col-brace" rowspan="${group.items.length}">}</td>`;
+                        html += `<td class="col-lbl" rowspan="${group.items.length}"><span class="text-red">${group.label}</span></td>`;
+                    }
+                }
+                tr.innerHTML = html;
+                tbody.appendChild(tr);
+            });
+        });
+
+        document.getElementById('out-total-biaya').innerText = rp(totalBiaya);
+
+        const summaryBox = document.getElementById('summary-box');
+        if (isModeBebanAktif) {
+            summaryBox.style.display = 'block';
+            textPenjualArr.push("PPh"); textPembeliArr.push("BPHTB");
+            document.getElementById('out-total-penjual').innerText = rp(bebanPenjual);
+            document.getElementById('out-total-pembeli').innerText = rp(bebanPembeli);
+            document.getElementById('out-rincian-penjual').innerText = textPenjualArr.join(" + ");
+            document.getElementById('out-rincian-pembeli').innerText = textPembeliArr.join(" + ");
+        } else {
+            summaryBox.style.display = 'none';
+        }
+
+        setTimeout(autoScaleFont, 10);
+    }
+
+    function exportPDF() {
+        saveToDatabase(true);
+
+        const element = document.getElementById('invoice-paper');
+        let p1 = document.getElementById('in-penjual').value.trim();
+        let p2 = document.getElementById('in-pembeli').value.trim();
+        let safeFileName = (p1 || p2) ? (p1 + (p2 ? "_" + p2 : "")) : "Tanpa_Nama";
+        
+        const opt = {
+            margin:       0,
+            filename:     'Invoice_' + safeFileName + '.pdf',
+            image:        { type: 'jpeg', quality: 1 },
+            html2canvas:  { scale: 2, useCORS: true }, 
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' } 
+        };
+        
+        element.style.boxShadow = "none";
+        html2pdf().set(opt).from(element).save().then(() => {
+            element.style.boxShadow = "0 5px 25px rgba(0,0,0,0.4)";
+        });
+    }
+
+    // Eksekusi mutlak menggambar UI saat kode HTML dibaca
+    toggleModeLayanan(); 
+</script>
+
+</body>
+</html>

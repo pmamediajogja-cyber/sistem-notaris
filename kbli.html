@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pencari KBLI Cerdas</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-body: #f8fafc;
+            --surface: #ffffff;
+            --text-main: #334155;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --accent: #d97706;
+        }
+
+        /* Mewarisi dark mode jika iframe mendeteksi parent-nya dark mode */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-body: #0f172a; --surface: #1e293b; --text-main: #f1f5f9;
+                --text-muted: #94a3b8; --border-color: rgba(148, 163, 184, 0.15);
+            }
+        }
+
+        body { font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; padding: 30px; background-color: transparent; color: var(--text-main); }
+        
+        .header-section { margin-bottom: 30px; text-align: center; }
+        .header-section h2 { margin: 0 0 10px 0; color: var(--primary); font-size: 24px; font-weight: 800; }
+        .header-section p { margin: 0; color: var(--text-muted); font-size: 14px; }
+
+        /* KOTAK PENCARIAN UTAMA */
+        .search-container { position: relative; max-width: 800px; margin: 0 auto 30px auto; }
+        .search-container i { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); font-size: 20px; color: var(--text-muted); }
+        .search-input { width: 100%; padding: 20px 20px 20px 55px; border-radius: 16px; border: 2px solid var(--border-color); font-family: inherit; font-size: 16px; font-weight: 600; background: var(--surface); color: var(--text-main); box-sizing: border-box; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); transition: 0.3s; }
+        .search-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 10px 30px -5px rgba(37, 99, 235, 0.15); }
+
+        /* AREA HASIL PENCARIAN */
+        .results-container { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; }
+        
+        .kbli-card { background: var(--surface); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; transition: 0.2s; position: relative; overflow: hidden; }
+        .kbli-card:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); transform: translateY(-2px); }
+        
+        .kbli-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; border-bottom: 1px dashed var(--border-color); padding-bottom: 15px; margin-bottom: 15px; }
+        
+        .kbli-kode { font-size: 22px; font-weight: 800; color: var(--primary); display: flex; flex-direction: column; }
+        .kbli-kategori { font-size: 11px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 4px; }
+        
+        .kbli-judul { flex: 1; font-size: 15px; font-weight: 700; color: var(--text-main); line-height: 1.5; }
+        
+        .badge-risiko { padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; white-space: nowrap; text-align: center; }
+        .risiko-rendah { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+        .risiko-menengah { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+        .risiko-tinggi { background: rgba(225, 29, 72, 0.1); color: #e11d48; }
+
+        .kbli-uraian { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .kbli-card.expanded .kbli-uraian { display: block; } /* Mode tampil penuh jika di-expand */
+
+        .kbli-footer { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.02); padding: 12px 15px; border-radius: 8px; margin-top: 15px;}
+        
+        .btn-salin { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 12px; transition: 0.2s; display: flex; align-items: center; gap: 6px; }
+        .btn-salin:hover { background: var(--primary-hover); }
+        .btn-salin.success { background: #10b981; }
+
+        .rekomendasi-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tag-terkait { font-size: 11px; font-weight: 700; color: var(--primary); background: rgba(37, 99, 235, 0.1); padding: 4px 8px; border-radius: 6px; cursor: pointer; transition: 0.2s; border: 1px solid transparent;}
+        .tag-terkait:hover { border-color: var(--primary); background: white; }
+
+        .empty-state { text-align: center; padding: 50px 20px; color: var(--text-muted); }
+        .empty-state i { font-size: 40px; margin-bottom: 15px; opacity: 0.5; }
+    </style>
+</head>
+<body>
+
+    <div class="header-section">
+        <h2><i class="fa-solid fa-book-atlas"></i> Pencari KBLI Cerdas</h2>
+        <p>Mesin telusur data Klasifikasi Baku Lapangan Usaha Indonesia (Algoritma Pencocokan & Rekomendasi)</p>
+    </div>
+
+    <div class="search-container">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="input-search" class="search-input" placeholder="Ketik kode KBLI, nama usaha, atau kata awam (Contoh: 'Toko Online', 'Developer')..." autocomplete="off">
+    </div>
+
+    <div id="results-container" class="results-container">
+        <div class="empty-state">
+            <i class="fa-solid fa-keyboard"></i>
+            <h3>Ketik sesuatu untuk memulai pencarian</h3>
+            <p>Sistem otomatis memfilter ribuan data KBLI secara instan.</p>
+        </div>
+    </div>
+
+    <script>
+        // ====================================================
+// 1. STATE MANAGEMENT & FETCH DATA (ASINKRON)
+// ====================================================
+let databaseKBLI = []; // Array kosong, akan diisi oleh JSON eksternal
+const searchInput = document.getElementById('input-search');
+const resultsContainer = document.getElementById('results-container');
+let debounceTimer;
+
+// Tampilkan status loading saat inisialisasi
+resultsContainer.innerHTML = `
+    <div class="empty-state">
+        <i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>
+        <h3>Menghubungkan ke Pusat Data KBLI...</h3>
+        <p>Memuat ribuan referensi klasifikasi usaha.</p>
+    </div>`;
+
+// FUNGSI INTI: Menarik file JSON secara asinkron (AJAX)
+async function inisialisasiDatabase() {
+    try {
+        // Mengambil file data_kbli.json dari server/folder lokal yang sama
+        const response = await fetch('data_kbli.json');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        // Mem-parsing raw teks menjadi objek JavaScript
+        databaseKBLI = await response.json();
+        
+        // Reset tampilan setelah data berhasil masuk RAM
+        resultsContainer.innerHTML = `
+            <div class="empty-state">
+                <i class="fa-solid fa-database" style="color: #10b981;"></i>
+                <h3>Database KBLI Aktif (${databaseKBLI.length} Data)</h3>
+                <p>Mesin siap. Ketikkan kata kunci pencarian di atas.</p>
+            </div>`;
+            
+        // Aktifkan kotak pencarian (bisa di-disable sebelumnya jika mau)
+        searchInput.disabled = false;
+        searchInput.focus();
+
+    } catch (error) {
+        console.error("Gagal memuat database KBLI:", error);
+        resultsContainer.innerHTML = `
+            <div class="empty-state">
+                <i class="fa-solid fa-triangle-exclamation" style="color: #e11d48;"></i>
+                <h3>Gagal Memuat Database KBLI</h3>
+                <p>Pastikan file <b>data_kbli.json</b> berada di folder yang sama. <br>Error: ${error.message}</p>
+            </div>`;
+    }
+}
+
+// Helper: Format Warna Badge Risiko
+function getBadgeClass(risiko) {
+    if(!risiko) return 'risiko-rendah';
+    let r = risiko.toLowerCase();
+    if(r.includes('tinggi')) return 'risiko-tinggi';
+    if(r.includes('menengah')) return 'risiko-menengah';
+    return 'risiko-rendah';
+}
+
+// ====================================================
+// 2. LOGIKA MESIN PENCARI (SCORING & DEBOUNCE)
+// ====================================================
+searchInput.addEventListener('input', (e) => {
+    clearTimeout(debounceTimer);
+    // Fungsi Debounce: Menunda pencarian 300ms
+    debounceTimer = setTimeout(() => {
+        jalankanPencarian(e.target.value);
+    }, 300);
+});
+
+function jalankanPencarian(query) {
+    query = query.toLowerCase().trim();
+    
+    // Cegah pencarian jika database belum terisi atau input kosong
+    if (databaseKBLI.length === 0) return; 
+    
+    if (query.length < 2) {
+        resultsContainer.innerHTML = `
+            <div class="empty-state">
+                <i class="fa-solid fa-keyboard"></i>
+                <h3>Ketik sesuatu untuk memulai pencarian</h3>
+                <p>Minimal 2 karakter dibutuhkan.</p>
+            </div>`;
+        return;
+    }
+
+    // A. Proses Pembobotan (Scoring Algorithm)
+    let hasilMatch = [];
+    
+    // Karena kita memproses 1700+ data, iterasi harus efisien
+    for (let i = 0; i < databaseKBLI.length; i++) {
+        let item = databaseKBLI[i];
+        let score = 0;
+        
+        // Proteksi jika ada properti yang undefined di dalam JSON
+        const strKode = item.kode || "";
+        const strJudul = (item.judul || "").toLowerCase();
+        const strUraian = (item.uraian || "").toLowerCase();
+        const arrKeyword = item.keyword || [];
+        
+        if (strKode.includes(query)) score += 100;
+        if (arrKeyword.some(kw => kw.toLowerCase().includes(query))) score += 80;
+        if (strJudul.includes(query)) score += 50;
+        if (strUraian.includes(query)) score += 10;
+
+        if (score > 0) {
+            hasilMatch.push({ item: item, score: score });
+        }
+    }
+
+    // B. Pengurutan (Sorting) & Pembatasan Hasil
+    hasilMatch.sort((a, b) => b.score - a.score);
+    
+    // Tampilkan 20 hasil terbaik agar memori grafis browser tidak terbebani
+    const finalResults = hasilMatch.slice(0, 20); 
+
+    renderHasil(finalResults, query);
+}
+
+// ====================================================
+// 3. LOGIKA RENDERING DOM & INTERAKSI
+// ====================================================
+function renderHasil(results, kataKunci) {
+    resultsContainer.innerHTML = '';
+
+    if (results.length === 0) {
+        resultsContainer.innerHTML = `
+            <div class="empty-state">
+                <i class="fa-solid fa-box-open"></i>
+                <h3>Data tidak ditemukan</h3>
+                <p>Coba gunakan kata kunci awam lainnya, misal: "Properti" atau "Kuliner".</p>
+            </div>`;
+        return;
+    }
+
+    // Bangun elemen HTML di memori (DocumentFragment) sebelum disuntik ke DOM untuk performa maksimal
+    const fragment = document.createDocumentFragment();
+
+    results.forEach(res => {
+        const data = res.item;
+        const arrTerkait = data.terkait || [];
+        const risikoText = data.risiko || "Tidak Diketahui";
+        
+        let terkaitHtml = arrTerkait.map(k => `<span class="tag-terkait" onclick="cariCepat('${k}')"><i class="fa-solid fa-link"></i> ${k}</span>`).join('');
+
+        const textCopy = `KBLI ${data.kode} - ${data.judul}`;
+
+        const cardContainer = document.createElement('div');
+        cardContainer.innerHTML = `
+            <div class="kbli-card">
+                <div class="kbli-header">
+                    <div class="kbli-kode">
+                        ${data.kode}
+                        <span class="kbli-kategori">Kategori ${data.kategori || '-'}</span>
+                    </div>
+                    <div class="kbli-judul">${data.judul}</div>
+                    <div class="badge-risiko ${getBadgeClass(risikoText)}">
+                        <i class="fa-solid fa-shield-halved"></i> Risiko ${risikoText}
+                    </div>
+                </div>
+                
+                <div class="kbli-uraian" onclick="this.parentElement.classList.toggle('expanded')" style="cursor: pointer;" title="Klik untuk meluaskan/meringkas teks">
+                    ${data.uraian || 'Tidak ada uraian.'}
+                </div>
+                
+                <div class="kbli-footer">
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <span style="font-size:10px; color:var(--text-muted); font-weight:700;">REKOMENDASI SEBIDANG:</span>
+                        <div class="rekomendasi-tags">${terkaitHtml || '-'}</div>
+                    </div>
+                    <button class="btn-salin" onclick="salinKeClipboard(this, '${textCopy}')">
+                        <i class="fa-regular fa-copy"></i> Salin ke Draf
+                    </button>
+                </div>
+            </div>
+        `;
+        fragment.appendChild(cardContainer.firstElementChild);
+    });
+
+    resultsContainer.appendChild(fragment);
+}
+
+function cariCepat(kode) {
+    searchInput.value = kode;
+    jalankanPencarian(kode);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function salinKeClipboard(btnElement, teks) {
+    navigator.clipboard.writeText(teks).then(() => {
+        const originalText = btnElement.innerHTML;
+        btnElement.classList.add('success');
+        btnElement.innerHTML = `<i class="fa-solid fa-check"></i> Tersalin!`;
+        
+        setTimeout(() => {
+            btnElement.classList.remove('success');
+            btnElement.innerHTML = originalText;
+        }, 2000);
+    }).catch(err => {
+        alert('Gagal menyalin teks. Fitur Clipboard diblokir.');
+    });
+}
+
+// ====================================================
+// 4. JALANKAN MESIN SAAT HALAMAN DIBUKA
+// ====================================================
+window.onload = () => {
+    inisialisasiDatabase();
+};
+    </script>
+</body>
+</html>

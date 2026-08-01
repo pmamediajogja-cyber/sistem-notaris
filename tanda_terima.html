@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tanda Terima Dokumen Profesional</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background-color: #f4f7f6; display: flex; height: 100vh; overflow: hidden; }
+        
+        .left-panel { width: 45%; background: #ffffff; padding: 25px; overflow-y: auto; border-right: 1px solid #ccc; box-shadow: 2px 0 10px rgba(0,0,0,0.1); z-index: 10; position: relative;}
+        .right-panel { width: 55%; padding: 40px 20px; display: flex; justify-content: center; align-items: flex-start; overflow-y: auto; background-color: #525659; }
+
+        h2 { margin-top: 0; color: #2c3e50; font-size: 18px; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .section-title { background: #ecf0f1; padding: 10px; font-weight: bold; font-size: 14px; margin: 20px 0 15px; border-left: 4px solid #3498db; }
+        
+        .form-group { margin-bottom: 15px; }
+        label.form-label { display: block; font-size: 13px; font-weight: bold; color: #34495e; margin-bottom: 5px; }
+        input[type="text"], input[type="date"], select { padding: 10px; border: 1px solid #bdc3c7; border-radius: 4px; box-sizing: border-box; font-size: 14px; font-family: inherit; background: white;}
+        .full-width { width: 100%; }
+        
+        /* Grid untuk pengaturan awal (Tanggal & Jenis) */
+        .setting-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;}
+
+        /* Checkbox & Multi-Detail Input System */
+        .doc-list-container { display: flex; flex-direction: column; gap: 12px; background: #fdfdfd; padding: 15px; border: 1px solid #e0e0e0; border-radius: 6px; }
+        .doc-item-wrapper { display: flex; flex-direction: column; gap: 6px; }
+        .doc-cb-label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; cursor: pointer; color: #2c3e50; }
+        .doc-cb-label input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+        
+        .detail-container { display: none; margin-left: 24px; padding: 12px; border: 1px dashed #3498db; border-radius: 4px; background: #f0f8ff; width: calc(100% - 24px); box-sizing: border-box;}
+        
+        .multi-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+        .multi-row .input-detail { flex-grow: 1; min-width: 0; }
+        .multi-row .sel-dropdown { width: 35%; flex-shrink: 0; }
+        
+        .btn-remove-row { background: #e74c3c; color: white; border: none; padding: 0; width: 38px; height: 38px; border-radius: 4px; cursor: pointer; font-weight: bold; flex-shrink: 0; transition: 0.2s;}
+        .btn-remove-row:hover { background: #c0392b; }
+        
+        .btn-add-row { background: #ecf0f1; color: #2980b9; border: 1px dashed #2980b9; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; width: 100%; margin-top: 5px; transition: 0.2s; }
+        .btn-add-row:hover { background: #d4e6f1; }
+
+        /* Custom Docs Manual */
+        .custom-doc-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+        .btn-add-blank { background: #3498db; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; margin-top: 10px; transition: 0.2s;}
+        .btn-add-blank:hover { background: #2980b9; }
+
+        .btn-export { background: #27ae60; color: white; border: none; padding: 15px; width: 100%; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 30px; box-shadow: 0 -4px 15px rgba(0,0,0,0.15); transition: 0.2s;}
+        .btn-export:hover { background: #2ecc71; }
+        .btn-new { background: #f39c12; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 13px; width: 100%; margin-bottom: 20px; transition: 0.2s;}
+
+        /* KERTAS A4 AUTO-SCALING */
+        .a4-paper { 
+            --base-font: 12pt; 
+            width: 210mm; 
+            min-height: 297mm; 
+            background: white; 
+            padding: 40px 50px; 
+            box-sizing: border-box; 
+            box-shadow: 0 5px 25px rgba(0,0,0,0.4); 
+            font-family: 'Times New Roman', Times, serif; 
+            font-size: var(--base-font); 
+            color: black; 
+            line-height: 1.5; 
+        }
+        
+        .kop-surat { text-align: center; margin-bottom: 20px; border-bottom: 3px solid black; padding-bottom: 10px;}
+        .kop-title { font-weight: bold; font-size: calc(var(--base-font) + 4pt); margin: 0; letter-spacing: 1px; }
+        .kop-name { font-weight: bold; font-size: calc(var(--base-font) + 8pt); margin: 5px 0; }
+        .kop-address { font-size: calc(var(--base-font) - 1pt); margin: 0; font-family: Arial, Helvetica, sans-serif;}
+        
+        .doc-title { text-align: center; font-weight: bold; font-size: calc(var(--base-font) + 2pt); margin-top: 15px; text-decoration: underline;}
+        
+        .content-text { margin-top: 25px; text-align: justify; line-height: 1.8; }
+        
+        .list-dokumen { padding-left: 25px; margin-top: 15px; margin-bottom: 25px; text-align: justify; line-height: 1.8; }
+        .list-dokumen li { margin-bottom: 8px; padding-left: 5px;}
+
+        .signature-area { margin-top: 60px; width: 100%; display: flex; justify-content: space-between; }
+        .signature-box { text-align: center; width: 45%; position: relative; min-height: 120px; }
+        .sig-name { font-weight: bold; margin-top: 80px; text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<div class="left-panel">
+    <h2>📄 Generator Tanda Terima</h2>
+    <button class="btn-new" onclick="resetForm()">🔄 Bersihkan Form & Buat Baru</button>
+
+    <div class="section-title">1. Pengaturan Dokumen</div>
+    <div class="setting-grid">
+        <div class="form-group">
+            <label class="form-label">Arah Dokumen</label>
+            <select id="in-jenis" class="full-width" onchange="toggleJenis(); updatePreview();">
+                <option value="masuk">📥 Terima Masuk (Klien -> Kantor)</option>
+                <option value="keluar">📤 Serah Keluar (Kantor -> Luar)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Tanggal Cetak</label>
+            <input type="date" id="in-tanggal" class="full-width" onchange="updatePreview()">
+        </div>
+    </div>
+
+    <div class="section-title" id="lbl-section-pihak">2. Data Pihak Lain</div>
+    <div class="form-group">
+        <label class="form-label" id="lbl-input-nama">Telah diserahkan dari (Nama Penyerah/Klien)</label>
+        <input type="text" id="in-nama" class="full-width" placeholder="Contoh: ENDRI PURWANI..." oninput="updatePreview()">
+    </div>
+
+    <div class="section-title">3. Dokumen Yang Diserahkan</div>
+    <p style="font-size: 12px; color: #7f8c8d; margin-top: -10px; margin-bottom: 15px;">Pilih dokumen. Klik tombol <b>"+ Tambah..."</b> jika jumlahnya lebih dari 1.</p>
+    
+    <div class="doc-list-container" id="checkbox-container">
+        
+        <div class="doc-item-wrapper">
+            <label class="doc-cb-label">
+                <input type="checkbox" class="doc-cb" value="" onchange="toggleMulti(this, 'alashak', 'No. ...., Kel/Desa ...., a.n ....')"> Asli Alas Hak (Sertifikat / Letter C)
+            </label>
+            <div class="detail-container">
+                <div class="rows-container"></div>
+                <button class="btn-add-row" onclick="addMultiRowBtn(this, 'alashak', 'No. ...., Kel/Desa ...., a.n ....')">+ Tambah Alas Hak Lainnya</button>
+            </div>
+        </div>
+
+        <div class="doc-item-wrapper">
+            <label class="doc-cb-label">
+                <input type="checkbox" class="doc-cb" value="Asli Salinan Akta Jual Beli (AJB)" onchange="toggleMulti(this, 'standard', 'No. ...., Tanggal ...., PPAT ....')"> Asli Salinan AJB
+            </label>
+            <div class="detail-container">
+                <div class="rows-container"></div>
+                <button class="btn-add-row" onclick="addMultiRowBtn(this, 'standard', 'No. ...., Tanggal ...., PPAT ....')">+ Tambah AJB Lainnya</button>
+            </div>
+        </div>
+
+        <div class="doc-item-wrapper">
+            <label class="doc-cb-label">
+                <input type="checkbox" class="doc-cb" value="Asli Sertifikat Hak Tanggungan" onchange="toggleMulti(this, 'standard', 'Peringkat ...., No. ...., Tanggal ....')"> Asli Hak Tanggungan
+            </label>
+            <div class="detail-container">
+                <div class="rows-container"></div>
+                <button class="btn-add-row" onclick="addMultiRowBtn(this, 'standard', 'Peringkat ...., No. ...., Tanggal ....')">+ Tambah HT Lainnya</button>
+            </div>
+        </div>
+
+        <div class="doc-item-wrapper">
+            <label class="doc-cb-label">
+                <input type="checkbox" class="doc-cb" value="Asli Surat Roya / Fiat Roya" onchange="toggleMulti(this, 'standard', 'Nomor ...., Tanggal ....')"> Asli Surat Roya
+            </label>
+            <div class="detail-container">
+                <div class="rows-container"></div>
+                <button class="btn-add-row" onclick="addMultiRowBtn(this, 'standard', 'Nomor ...., Tanggal ....')">+ Tambah Surat Roya Lainnya</button>
+            </div>
+        </div>
+
+        <div class="doc-item-wrapper">
+            <label class="doc-cb-label">
+                <input type="checkbox" class="doc-cb" value="Asli SPPT PBB" onchange="toggleMulti(this, 'standard', 'NOP / Tahun ...., atas nama ....')"> Asli SPPT PBB
+            </label>
+            <div class="detail-container">
+                <div class="rows-container"></div>
+                <button class="btn-add-row" onclick="addMultiRowBtn(this, 'standard', 'NOP / Tahun ...., atas nama ....')">+ Tambah SPPT PBB Lainnya</button>
+            </div>
+        </div>
+
+        <div class="doc-item-wrapper">
+            <label class="doc-cb-label">
+                <input type="checkbox" class="doc-cb" value="Asli STTS PBB (Bukti Lunas)" onchange="toggleMulti(this, 'standard', 'Tahun ....')"> Asli STTS PBB (Bukti Lunas)
+            </label>
+            <div class="detail-container">
+                <div class="rows-container"></div>
+                <button class="btn-add-row" onclick="addMultiRowBtn(this, 'standard', 'Tahun ....')">+ Tambah STTS Lainnya</button>
+            </div>
+        </div>
+
+        <div class="doc-item-wrapper">
+            <label class="doc-cb-label">
+                <input type="checkbox" class="doc-cb" value="Fotocopy KTP dan Kartu Keluarga (KK)" onchange="toggleMulti(this, 'standard', 'Atas nama ....')"> Fotocopy KTP & KK
+            </label>
+            <div class="detail-container">
+                <div class="rows-container"></div>
+                <button class="btn-add-row" onclick="addMultiRowBtn(this, 'standard', 'Atas nama ....')">+ Tambah Identitas Lainnya</button>
+            </div>
+        </div>
+
+    </div>
+
+    <div style="margin-top: 15px;">
+        <label class="form-label">Dokumen Lainnya (Ketik Manual):</label>
+        <div id="dynamic-docs-container"></div>
+        <button class="btn-add-blank" onclick="addManualDoc()">+ Tambah Dokumen Lain</button>
+    </div>
+
+    <div class="section-title" id="lbl-section-staff">4. Nama Staff / Notaris</div>
+    <div class="form-group">
+        <label class="form-label" id="lbl-input-staff">Nama Terang (Internal Kantor)</label>
+        <input type="text" id="in-nama-staff" class="full-width" value="ENDRI PURWANI, S.H., M.Kn." placeholder="Ketik nama penerima/penyerah..." oninput="updatePreview()">
+    </div>
+
+    <button class="btn-export" onclick="exportPDF()">📥 Download PDF & Simpan Log</button>
+</div>
+
+<div class="right-panel">
+    <div class="a4-paper" id="tt-paper">
+        <div class="kop-surat">
+            <div class="kop-title">NOTARIS & PEJABAT PEMBUAT AKTA TANAH</div>
+            <div class="kop-name">ENDRI PURWANI, S.H., M.Kn.</div>
+            <div class="kop-address">Jl. Palagan Tentara Pelajar Km. 8,5 No. 119<br>Telp. (0274) 4532737 / 087739207960<br>SLEMAN YOGYAKARTA 55581</div>
+        </div>
+
+        <div class="doc-title" id="out-judul">PENERIMAAN BERKAS</div>
+        
+        <div class="content-text">
+            Telah diserahkan <span id="out-arah-teks">dari</span> <span id="out-nama" style="font-weight: bold; text-transform: uppercase;">........................................................................</span> berupa : 
+        </div>
+
+        <ol class="list-dokumen" id="out-list-docs">
+            <li style="list-style: none;"><i>(Belum ada dokumen yang dipilih)</i></li>
+        </ol>
+
+        <div class="content-text">
+            Demikian Tanda Terima ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.
+        </div>
+
+        <div class="signature-area">
+            <div class="signature-box">
+                <br>
+                <span id="out-ttd-kiri-judul">Yang Menyerahkan</span>
+                <div class="sig-name" id="out-ttd-kiri-nama">( ........................................ )</div>
+            </div>
+            <div class="signature-box">
+                Sleman, <span id="out-tgl-cetak">.........................</span><br>
+                <span id="out-ttd-kanan-judul">Yang Menerima</span>
+                <div class="sig-name" id="out-ttd-kanan-nama">( ENDRI PURWANI, S.H., M.Kn. )</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ===============================================
+    // INISIALISASI TANGGAL HARI INI
+    // ===============================================
+    window.onload = function() {
+        // Set input date ke hari ini format YYYY-MM-DD
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        document.getElementById('in-tanggal').value = `${year}-${month}-${day}`;
+        
+        updatePreview();
+    };
+
+    // Fungsi konversi format YYYY-MM-DD ke teks Indonesia (misal: 18 Juni 2026)
+    function formatDateToIndonesian(dateString) {
+        if(!dateString) return ".........................";
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return "........................."; // Jika invalid
+        const options = { day: 'numeric', month: 'long', year: 'numeric' };
+        return d.toLocaleDateString('id-ID', options);
+    }
+
+    // ===============================================
+    // LOGIKA TOGGLE MASUK / KELUAR
+    // ===============================================
+    function toggleJenis() {
+        const jenis = document.getElementById('in-jenis').value;
+        const lblInputNama = document.getElementById('lbl-input-nama');
+        const inNama = document.getElementById('in-nama');
+
+        if (jenis === 'masuk') {
+            lblInputNama.innerText = "Telah diserahkan dari (Nama Penyerah/Klien)";
+            inNama.placeholder = "Contoh: ENDRI PURWANI...";
+        } else {
+            lblInputNama.innerText = "Telah diserahkan kepada (Nama Tujuan/Instansi)";
+            inNama.placeholder = "Contoh: Kantor Pertanahan Sleman / Klien...";
+        }
+    }
+
+
+    // ===============================================
+    // LOGIKA MULTI-ITEM 
+    // ===============================================
+    function toggleMulti(cbElem, rowType, placeholder) {
+        const wrapper = cbElem.closest('.doc-item-wrapper');
+        const detailContainer = wrapper.querySelector('.detail-container');
+        const rowsContainer = wrapper.querySelector('.rows-container');
+
+        if (cbElem.checked) {
+            detailContainer.style.display = 'block';
+            if (rowsContainer.children.length === 0) {
+                const btn = detailContainer.querySelector('.btn-add-row');
+                addMultiRowBtn(btn, rowType, placeholder);
+            }
+        } else {
+            detailContainer.style.display = 'none';
+            rowsContainer.innerHTML = ''; 
+            updatePreview();
+        }
+    }
+
+    function addMultiRowBtn(btnElem, rowType, placeholder) {
+        const rowsContainer = btnElem.previousElementSibling;
+        const div = document.createElement('div');
+        div.className = 'multi-row';
+
+        if (rowType === 'alashak') {
+            div.innerHTML = `
+                <select class="sel-dropdown" onchange="updatePreview()">
+                    <option value="Sertifikat Hak Milik (SHM)">SHM</option>
+                    <option value="Sertifikat Hak Guna Bangunan (SHGB)">SHGB</option>
+                    <option value="Sertifikat Hak Guna Usaha (SHGU)">SHGU</option>
+                    <option value="Sertifikat Hak Milik Atas Satuan Rumah Susun (SHMSRS)">SHMSRS</option>
+                    <option value="Sertifikat Hak Pakai (SHP)">SHP</option>
+                    <option value="Letter C / Petok D">Letter C / Petok D</option>
+                </select>
+                <input type="text" class="input-detail" placeholder="${placeholder}" oninput="updatePreview()">
+                <button class="btn-remove-row" onclick="removeMultiRow(this)" title="Hapus Baris Ini">✖</button>
+            `;
+        } else {
+            div.innerHTML = `
+                <input type="text" class="input-detail" placeholder="${placeholder}" oninput="updatePreview()">
+                <button class="btn-remove-row" onclick="removeMultiRow(this)" title="Hapus Baris Ini">✖</button>
+            `;
+        }
+        rowsContainer.appendChild(div);
+        
+        const newInputs = div.querySelectorAll('.input-detail');
+        if(newInputs.length > 0) newInputs[0].focus();
+        
+        updatePreview();
+    }
+
+    function removeMultiRow(btnElem) {
+        const row = btnElem.parentElement;
+        const rowsContainer = row.parentElement;
+        const detailContainer = rowsContainer.parentElement;
+        const wrapper = detailContainer.closest('.doc-item-wrapper');
+        const cb = wrapper.querySelector('.doc-cb');
+
+        row.remove(); 
+        if (rowsContainer.children.length === 0) {
+            cb.checked = false;
+            detailContainer.style.display = 'none';
+        }
+        updatePreview();
+    }
+
+    function addManualDoc() {
+        const container = document.getElementById('dynamic-docs-container');
+        const div = document.createElement('div');
+        div.className = 'custom-doc-row';
+        div.innerHTML = `
+            <input type="text" class="full-width" placeholder="Ketik jenis dokumen dan rinciannya..." oninput="updatePreview()" style="padding: 10px; border: 1px solid #bdc3c7; border-radius: 4px; font-size: 14px;">
+            <button class="btn-remove-row" onclick="this.parentElement.remove(); updatePreview();" title="Hapus Baris">✖</button>
+        `;
+        container.appendChild(div);
+        updatePreview();
+    }
+
+    function resetForm() {
+        document.getElementById('in-nama').value = "";
+        document.getElementById('in-nama-staff').value = "ENDRI PURWANI, S.H., M.Kn.";
+        document.getElementById('dynamic-docs-container').innerHTML = "";
+        
+        // Kembalikan ke opsi Masuk
+        document.getElementById('in-jenis').value = 'masuk';
+        toggleJenis();
+
+        document.querySelectorAll('.doc-cb').forEach(cb => {
+            cb.checked = false;
+            toggleMulti(cb, '', '');
+        });
+
+        // Reset tanggal ke hari ini
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        document.getElementById('in-tanggal').value = `${year}-${month}-${day}`;
+
+        updatePreview();
+    }
+
+    // ===============================================
+    // UPDATE KERTAS A4
+    // ===============================================
+    function updatePreview() {
+        // Ambil Data
+        const jenis = document.getElementById('in-jenis').value;
+        const tanggalValue = document.getElementById('in-tanggal').value;
+        const namaLuar = document.getElementById('in-nama').value;
+        const namaStaff = document.getElementById('in-nama-staff').value;
+        
+        // Set Tanggal
+        document.getElementById('out-tgl-cetak').innerText = formatDateToIndonesian(tanggalValue);
+        
+        // Logika Pergantian Teks (Masuk vs Keluar)
+        if (jenis === 'masuk') {
+            document.getElementById('out-judul').innerText = "PENERIMAAN BERKAS";
+            document.getElementById('out-arah-teks').innerText = "dari";
+            
+            // Kiri = Klien (Menyerahkan)
+            document.getElementById('out-ttd-kiri-judul').innerText = "Yang Menyerahkan";
+            document.getElementById('out-ttd-kiri-nama').innerText = namaLuar ? `( ${namaLuar.toUpperCase()} )` : "( ........................................ )";
+            
+            // Kanan = Staff (Menerima)
+            document.getElementById('out-ttd-kanan-judul').innerText = "Yang Menerima";
+            document.getElementById('out-ttd-kanan-nama').innerText = namaStaff ? `( ${namaStaff.toUpperCase()} )` : "( ........................................ )";
+        } else {
+            document.getElementById('out-judul').innerText = "PENYERAHAN BERKAS";
+            document.getElementById('out-arah-teks').innerText = "kepada";
+            
+            // Kiri = Pihak Luar (Menerima)
+            document.getElementById('out-ttd-kiri-judul').innerText = "Yang Menerima";
+            document.getElementById('out-ttd-kiri-nama').innerText = namaLuar ? `( ${namaLuar.toUpperCase()} )` : "( ........................................ )";
+            
+            // Kanan = Staff (Menyerahkan)
+            document.getElementById('out-ttd-kanan-judul').innerText = "Yang Menyerahkan";
+            document.getElementById('out-ttd-kanan-nama').innerText = namaStaff ? `( ${namaStaff.toUpperCase()} )` : "( ........................................ )";
+        }
+
+        // Teks Nama Tengah Kalimat
+        document.getElementById('out-nama').innerText = namaLuar || "........................................................................";
+
+        // Kumpulkan Dokumen
+        let items = [];
+        document.querySelectorAll('.doc-item-wrapper').forEach(wrapper => {
+            const cb = wrapper.querySelector('.doc-cb');
+            if(cb.checked) {
+                const rows = wrapper.querySelectorAll('.multi-row');
+                rows.forEach(row => {
+                    let combinedText = "";
+                    const selDropdown = row.querySelector('.sel-dropdown');
+                    if (selDropdown) combinedText = "Asli " + selDropdown.value;
+                    else combinedText = cb.value;
+                    
+                    const detail = row.querySelector('.input-detail');
+                    if(detail && detail.value.trim() !== '') {
+                        combinedText += " " + detail.value.trim();
+                    }
+                    items.push(combinedText);
+                });
+            }
+        });
+
+        document.querySelectorAll('.custom-doc-row input[type="text"]').forEach(input => {
+            const val = input.value.trim();
+            if (val !== "") items.push(val);
+        });
+
+        // Render List ke Kertas
+        const ul = document.getElementById('out-list-docs');
+        ul.innerHTML = "";
+        
+        if (items.length === 0) {
+            ul.innerHTML = "<li style='list-style: none;'><i>(Belum ada dokumen yang diinput)</i></li>";
+        } else {
+            items.forEach(itemText => {
+                const li = document.createElement('li');
+                li.innerText = itemText.endsWith('.') || itemText.endsWith(';') ? itemText : itemText + ".";
+                ul.appendChild(li);
+            });
+        }
+    }
+
+    function exportPDF() {
+        const element = document.getElementById('tt-paper');
+        let clientName = document.getElementById('in-nama').value.trim() || "Pihak_Lain";
+        let jenisStr = document.getElementById('in-jenis').value === 'masuk' ? 'Terima' : 'Serah';
+        
+        if (window.parent && window.parent.saveToMasterDB) {
+            let label = document.getElementById('in-jenis').value === 'masuk' ? 'TANDA TERIMA' : 'TANDA SERAH';
+            window.parent.saveToMasterDB(label, 'Dokumen Berkas', clientName);
+        }
+
+        const opt = {
+            margin:       0,
+            filename:     jenisStr + '_Berkas_' + clientName.replace(/ /g, "_") + '.pdf',
+            image:        { type: 'jpeg', quality: 1 },
+            html2canvas:  { scale: 2, useCORS: true }, 
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' } 
+        };
+        
+        element.style.boxShadow = "none";
+        html2pdf().set(opt).from(element).save().then(() => {
+            element.style.boxShadow = "0 5px 25px rgba(0,0,0,0.4)";
+        });
+    }
+</script>
+
+</body>
+</html>

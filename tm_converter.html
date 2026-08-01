@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="Expires" content="0">
+    <title>Auto-Generator TM-3 BPN & PDF (Natural UI)</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f1f5f9; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Panel Kontrol Kiri */
+        .left-panel { width: 320px; background: #ffffff; padding: 25px; box-shadow: 4px 0 20px rgba(0,0,0,0.05); z-index: 10; overflow-y: auto; flex-shrink: 0;}
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;}
+        input[type="text"] { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-family: monospace; font-size: 14px; background: #f8fafc; transition: 0.2s;}
+        input[type="text"]:focus { border-color: #3b82f6; outline: none; background: #fff;}
+        
+        .btn-pdf { width: 100%; padding: 14px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; color: white; margin-top: 10px; font-size: 13px; transition: 0.2s; background: #10b981;}
+        .btn-pdf:hover { background: #059669; }
+
+        /* Panel Kanan (Workspace) */
+        .right-panel { flex: 1; background: #64748b; padding: 40px; display: flex; justify-content: center; align-items: flex-start; overflow-y: auto; position: relative;}
+
+        /* Kontrol Zoom */
+        .zoom-controls { position: fixed; bottom: 30px; right: 30px; display: flex; gap: 10px; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 100; backdrop-filter: blur(4px);}
+        .btn-zoom { background: #3b82f6; color: white; border: none; width: 40px; height: 40px; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.2s;}
+        .btn-zoom:hover { background: #2563eb; }
+        .zoom-info { display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; color: #334155; min-width: 60px;}
+
+        #zoom-wrapper { transform-origin: top center; transition: transform 0.2s ease-out; margin-bottom: 50px; }
+
+        /* ========================================= */
+        /* KERTAS A4 & UI NATURAL (LOW RES EFFECT)   */
+        /* ========================================= */
+        .a4-paper {
+            width: 210mm;
+            height: 297mm;
+            background: white;
+            padding: 25mm 20mm; 
+            box-sizing: border-box;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4); /* Ini yang sebelumnya ikut ter-print */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .doc-title { font-family: 'Times New Roman', Times, serif; font-size: 16pt; font-weight: bold; margin-bottom: 25mm; letter-spacing: 1px;}
+
+        .phones-container {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            height: 210mm;
+            gap: 15mm;
+        }
+
+        /* LOW RESOLUTION SIMULATION */
+        .phone-frame {
+            flex: 1;
+            background-color: #121b22; 
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #ffffff;
+            border-radius: 0; 
+            
+            filter: blur(0.3px) contrast(1.05) saturate(1.1); 
+            -webkit-font-smoothing: none; 
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: geometricPrecision;
+            box-shadow: none;
+            border: 1px solid #000;
+        }
+
+        .android-status-bar { background: #000; padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #ccc; font-weight: 500;}
+        .status-icons { display: flex; gap: 6px; align-items: center;}
+        
+        .app-header { background: #0b1116; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0ea5e9; font-size: 15px; font-weight: bold;}
+        .app-title-group { display: flex; align-items: center; gap: 10px;}
+        .app-logo { width: 22px; height: 22px; background: url('https://upload.wikimedia.org/wikipedia/commons/e/e0/Globe_icon.svg') no-repeat center; background-size: cover; filter: grayscale(1) brightness(0.7);}
+        
+        .tm-toolbar { display: flex; justify-content: space-between; padding: 10px 12px; background: #121b22;}
+        .tm-icon { width: 35px; height: 35px; background: #ddd; border-radius: 4px; display: flex; justify-content: center; align-items: center; color: #121b22; font-size: 18px;}
+        .tm-acc { font-size: 11px; padding: 6px 15px; color: #888; background: #0b1116;}
+
+        .data-section-header { 
+            background: linear-gradient(180deg, #1d3c58 0%, #11283d 100%); 
+            text-align: center; padding: 8px; font-size: 13px; font-weight: bold; 
+            border-top: 1px solid #2b5472; border-bottom: 1px solid #0a1722;
+        }
+        
+        .row-input { display: flex; padding: 10px 15px; align-items: center; border-bottom: 1px solid #1a252f; }
+        .row-label { width: 90px; font-size: 13px; color: #ccc; }
+        .row-val-box { flex: 1; border-bottom: 1px solid #38bdf8; padding: 4px 8px; font-family: monospace; font-size: 14px; background: #0b1116;}
+        .pin-icon { background: #ddd; color: #000; width: 22px; height: 26px; border-radius: 4px 4px 12px 12px; display: flex; justify-content: center; align-items: center; font-size: 12px; margin-left: 10px;}
+
+        .row-text { display: flex; padding: 8px 15px; font-size: 13px;}
+        .row-text .lbl { width: 90px; color: #aaa; }
+        .row-text .val { flex: 1; color: #6cb2eb; font-family: monospace; font-size: 14px;} 
+        .row-text .val.white { color: #ddd; }
+
+        .ad-banner { background: #fff; color: #0ea5e9; padding: 12px; text-align: center; font-size: 12px; font-weight: bold; width: fit-content; margin: 20px 15px;}
+
+        #map-container { flex: 1; width: 100%; background: #222;}
+
+        .android-nav-bar { background: #000; padding: 12px; display: flex; justify-content: space-around; align-items: center; margin-top: auto;}
+        .nav-btn { width: 12px; height: 12px; border: 2.5px solid #555;}
+        .nav-square { border-radius: 2px; }
+        .nav-circle { border-radius: 50%; }
+        .nav-triangle { width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 14px solid #555; border-top: none; transform: rotate(-90deg);}
+    </style>
+</head>
+<body>
+
+<div class="left-panel">
+    <h2>🎯 Koordinat Smart Input</h2>
+    <p style="font-size: 12px; color: #64748b; line-height: 1.5;">Otomatisasi pemetaan BPN (TM-3). Cukup paste format "Latitude, Longitude". Mesin akan membaca otomatis tanpa perlu diklik.</p>
+    
+    <div class="form-group">
+        <label>Format Koordinat Cepat (Lat, Lon)</label>
+        <input type="text" id="in-koordinat" value="-7.670941, 110.339693" placeholder="Contoh: -7.670941, 110.339693" oninput="autoProses()">
+        <small id="status-baca" style="color: #10b981; font-weight: bold; display: none; margin-top: 5px;">Membaca koordinat...</small>
+    </div>
+
+    <button class="btn-pdf" onclick="generatePDF()"><i class="fa-solid fa-file-pdf"></i> Cetak Dokumen PDF</button>
+</div>
+
+<div class="right-panel">
+    
+    <div class="zoom-controls">
+        <button class="btn-zoom" onclick="zoomOut()">-</button>
+        <div class="zoom-info" id="zoom-level">70%</div>
+        <button class="btn-zoom" onclick="zoomIn()">+</button>
+    </div>
+
+    <div id="zoom-wrapper">
+        <div class="a4-paper" id="pdf-content">
+            <div class="doc-title">TITIK KOORDINAT</div>
+
+            <div class="phones-container">
+                
+                <div class="phone-frame">
+                    <div class="android-status-bar">
+                        <div><span class="realtime-clock">13:39</span> <i class="fa-brands fa-whatsapp" style="margin-left: 4px; color: #22c55e;"></i></div>
+                        <div class="status-icons">
+                            <span style="font-size: 9px; line-height: 1.1;">0.01<br>KB/d</span>
+                            <i class="fa-solid fa-signal"></i>
+                            <i class="fa-solid fa-wifi"></i>
+                            <i class="fa-solid fa-battery-half"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="app-header">
+                        <div class="app-title-group">
+                            <div class="app-logo"></div>
+                            <span>TMConverter</span>
+                        </div>
+                        <i class="fa-solid fa-ellipsis-vertical"></i>
+                    </div>
+                    <div class="tm-acc">Acc:0FF</div>
+                    
+                    <div class="tm-toolbar">
+                        <div class="tm-icon" style="background: transparent; color: white; border: 2px solid white; border-radius: 50%;"><i class="fa-solid fa-location-crosshairs"></i></div>
+                        <div class="tm-icon"><i class="fa-solid fa-location-dot"></i><span style="font-size: 10px; position:absolute; margin-top:-10px; margin-left:-10px;">+</span></div>
+                        <div class="tm-icon"><i class="fa-regular fa-map"></i></div>
+                        <div class="tm-icon"><i class="fa-solid fa-floppy-disk"></i></div>
+                        <div class="tm-icon"><i class="fa-solid fa-list"></i></div>
+                        <div class="tm-icon"><i class="fa-solid fa-share-nodes"></i></div>
+                    </div>
+
+                    <div class="data-section-header">Latitude/Longitude</div>
+                    <div class="row-input">
+                        <div class="row-label">Latitude:</div>
+                        <div class="row-val-box" id="out-lat">-7.670941</div>
+                        <div class="pin-icon"><i class="fa-solid fa-location-dot"></i></div>
+                    </div>
+                    <div class="row-input">
+                        <div class="row-label">Longitude:</div>
+                        <div class="row-val-box" id="out-lon">110.339693</div>
+                        <div class="pin-icon"><i class="fa-solid fa-location-dot"></i></div>
+                    </div>
+
+                    <div class="data-section-header">Transverse Mercator</div>
+                    <div class="row-text" style="margin-top: 5px;">
+                        <div class="lbl">Easting (X):</div>
+                        <div class="val" id="out-tm-x">0.0000</div>
+                    </div>
+                    <div class="row-text">
+                        <div class="lbl">Northing (Y):</div>
+                        <div class="val" id="out-tm-y">0.0000</div>
+                    </div>
+
+                    <div class="data-section-header">UTM</div>
+                    <div class="row-text" style="margin-top: 5px;">
+                        <div class="lbl">Zone</div>
+                        <div class="val white" id="out-utm-z">49.0</div>
+                        <div class="val white" style="text-align: right; flex: 0;" id="out-utm-h">S</div>
+                    </div>
+                    <div class="row-text">
+                        <div class="lbl">Easting</div>
+                        <div class="val" id="out-utm-x">0.0000</div>
+                    </div>
+                    <div class="row-text">
+                        <div class="lbl">Northing</div>
+                        <div class="val" id="out-utm-y">0.0000</div>
+                    </div>
+
+                    <div class="data-section-header">Lambert conformal conic</div>
+                    <div class="row-text" style="margin-top: 5px;">
+                        <div class="lbl">Easting</div>
+                        <div class="val white">0.0</div>
+                    </div>
+                    <div class="row-text">
+                        <div class="lbl">Northing</div>
+                        <div class="val white">0.0</div>
+                    </div>
+
+                    <div class="ad-banner">Remove Ads: Upgrade to Pro</div>
+
+                    <div class="android-nav-bar">
+                        <div class="nav-btn nav-square"></div>
+                        <div class="nav-btn nav-circle"></div>
+                        <div class="nav-btn nav-triangle"></div>
+                    </div>
+                </div>
+
+                <div class="phone-frame">
+                    <div class="android-status-bar">
+                        <div><span class="realtime-clock">13:39</span> <i class="fa-brands fa-whatsapp" style="margin-left: 4px; color: #22c55e;"></i></div>
+                        <div class="status-icons">
+                            <span style="font-size: 9px; line-height: 1.1;">474<br>KB/d</span>
+                            <i class="fa-solid fa-signal"></i>
+                            <i class="fa-solid fa-wifi"></i>
+                            <i class="fa-solid fa-battery-half"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="app-header" style="border-bottom: 2px solid #0ea5e9;">
+                        <div class="app-title-group">
+                            <div class="app-logo"></div>
+                            <span>Map</span>
+                        </div>
+                        <i class="fa-solid fa-ellipsis-vertical"></i>
+                    </div>
+                    
+                    <div id="map-container"></div>
+
+                    <div class="android-nav-bar">
+                        <div class="nav-btn nav-square"></div>
+                        <div class="nav-btn nav-circle"></div>
+                        <div class="nav-btn nav-triangle"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let map, marker;
+    let currentScale = 0.7; 
+    let typingTimer; 
+
+    function updateClock() {
+        const now = new Date();
+        const hrs = String(now.getHours()).padStart(2, '0');
+        const mins = String(now.getMinutes()).padStart(2, '0');
+        const timeString = `${hrs}:${mins}`;
+        document.querySelectorAll('.realtime-clock').forEach(c => c.innerText = timeString);
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    const zoomWrapper = document.getElementById('zoom-wrapper');
+    const zoomLevelText = document.getElementById('zoom-level');
+
+    function applyZoom() {
+        zoomWrapper.style.transform = `scale(${currentScale})`;
+        zoomLevelText.innerText = Math.round(currentScale * 100) + '%';
+    }
+    function zoomIn() { if (currentScale < 1.5) { currentScale += 0.05; applyZoom(); } }
+    function zoomOut() { if (currentScale > 0.3) { currentScale -= 0.05; applyZoom(); } }
+
+    function initMap() {
+        map = L.map('map-container', { zoomControl: false, attributionControl: false }).setView([-7.670941, 110.339693], 18);
+        L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 20 }).addTo(map);
+
+        L.Control.Watermark = L.Control.extend({
+            onAdd: function(map) {
+                var img = L.DomUtil.create('img');
+                img.src = 'https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg';
+                img.style.width = '35px'; img.style.margin = '10px'; img.style.filter = 'drop-shadow(0px 0px 2px rgba(0,0,0,0.8))';
+                return img;
+            }
+        });
+        L.control.watermark = function(opts) { return new L.Control.Watermark(opts); }
+        L.control.watermark({ position: 'bottomleft' }).addTo(map);
+
+        const redIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41]
+        });
+
+        marker = L.marker([-7.670941, 110.339693], {icon: redIcon}).addTo(map);
+    }
+
+    function autoProses() {
+        const statusEl = document.getElementById('status-baca');
+        statusEl.style.display = 'block';
+        statusEl.innerText = "Mengetik...";
+        statusEl.style.color = "#f59e0b";
+
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(prosesAlgoritmaBPN, 800); 
+    }
+
+    function prosesAlgoritmaBPN() {
+        const inputStr = document.getElementById('in-koordinat').value;
+        const statusEl = document.getElementById('status-baca');
+
+        const cleanedStr = inputStr.replace(/[^0-9.,-]/g, '');
+        const parts = cleanedStr.split(',');
+
+        if (parts.length < 2) {
+            statusEl.innerText = "Format tidak lengkap (Butuh Koma)";
+            statusEl.style.color = "#e11d48";
+            return;
+        }
+
+        const lat = parseFloat(parts[0].trim());
+        const lon = parseFloat(parts[1].trim());
+
+        if (isNaN(lat) || isNaN(lon)) {
+            statusEl.innerText = "Koordinat tidak valid!";
+            statusEl.style.color = "#e11d48";
+            return;
+        }
+
+        statusEl.innerText = "Berhasil dibaca otomatis! ✅";
+        statusEl.style.color = "#10b981";
+
+        document.getElementById('out-lat').innerText = lat.toFixed(6);
+        document.getElementById('out-lon').innerText = lon.toFixed(6);
+
+        const utmZone = Math.floor((lon + 180) / 6) + 1;
+        const hemisphere = lat >= 0 ? 'N' : 'S';
+        const isSouthString = lat >= 0 ? '' : '+south ';
+        
+        document.getElementById('out-utm-z').innerText = `${utmZone}.0`;
+        document.getElementById('out-utm-h').innerText = hemisphere;
+
+        const utmProjString = `+proj=utm +zone=${utmZone} ${isSouthString}+datum=WGS84 +units=m +no_defs`; 
+        try {
+            const utmResult = proj4('EPSG:4326', utmProjString, [lon, lat]);
+            document.getElementById('out-utm-x').innerText = utmResult[0].toFixed(4);
+            document.getElementById('out-utm-y').innerText = utmResult[1].toFixed(4);
+        } catch (e) { console.error(e); }
+
+        const utmCM = (utmZone - 1) * 6 - 180 + 3; 
+        const tm3CM = lon < utmCM ? utmCM - 1.5 : utmCM + 1.5; 
+        const tm3ProjString = `+proj=tmerc +lat_0=0 +lon_0=${tm3CM} +k=0.9999 +x_0=200000 +y_0=1500000 +ellps=WGS84 +units=m +no_defs`;
+        
+        try {
+            const tm3Result = proj4('EPSG:4326', tm3ProjString, [lon, lat]);
+            document.getElementById('out-tm-x').innerText = tm3Result[0].toFixed(4);
+            document.getElementById('out-tm-y').innerText = tm3Result[1].toFixed(4);
+        } catch (e) { console.error(e); }
+
+        map.setView([lat, lon], 18);
+        marker.setLatLng([lat, lon]);
+    }
+
+    function generatePDF() {
+        const container = document.getElementById('pdf-content');
+        
+        const tempScale = currentScale;
+        currentScale = 1; applyZoom();
+
+        // [PENTING] Mematikan bayangan kanvas web sementara agar tidak ikut tercetak di pinggir PDF
+        container.style.boxShadow = "none";
+        
+        const opt = {
+            margin:       0,
+            filename:     `Titik_Koordinat.pdf`,
+            image:        { type: 'jpeg', quality: 0.6 },
+            html2canvas:  { scale: 1, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        html2pdf().set(opt).from(container).save().then(() => {
+            // [PENTING] Mengembalikan bayangan kanvas web setelah selesai di-download
+            container.style.boxShadow = "0 10px 40px rgba(0,0,0,0.4)";
+            currentScale = tempScale; applyZoom(); 
+        });
+    }
+
+    window.onload = function() {
+        applyZoom();
+        initMap();
+        prosesAlgoritmaBPN(); 
+    };
+</script>
+
+</body>
+</html>

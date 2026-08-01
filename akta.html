@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="Expires" content="0">
+    <title>Lokal Proofreader Akta Notaris</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 30px; display: flex; flex-direction: column; align-items: center; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; display: flex; flex-direction: column; gap: 20px; }
+        h2 { color: #2c3e50; margin-top: 0; text-align: center; border-bottom: 2px solid #ecf0f1; padding-bottom: 15px; }
+        
+        .upload-area { border: 2px dashed #bdc3c7; padding: 30px; text-align: center; border-radius: 8px; background: #fafafa; transition: 0.3s; }
+        .upload-area:hover { border-color: #3498db; background: #f0f8ff; }
+        input[type="file"] { display: none; }
+        .btn-upload { background-color: #2980b9; color: white; padding: 12px 25px; border-radius: 5px; cursor: pointer; font-weight: bold; display: inline-block; }
+        .btn-upload:hover { background-color: #3498db; }
+        
+        .dashboard { display: flex; gap: 20px; align-items: flex-start; }
+        
+        /* Panel Kiri: Laporan Deteksi */
+        .report-panel { flex: 1; background: #fdfdfd; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0; min-width: 250px; position: sticky; top: 20px; }
+        .report-panel h3 { margin-top: 0; font-size: 16px; color: #34495e; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+        .issue-item { margin-bottom: 10px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+        .badge { padding: 4px 8px; border-radius: 12px; color: white; font-size: 12px; font-weight: bold; }
+        
+        /* Panel Kanan: Teks Dokumen */
+        .document-panel { flex: 3; background: white; padding: 30px; border-radius: 8px; border: 1px solid #e0e0e0; min-height: 400px; font-family: 'Times New Roman', Times, serif; font-size: 16px; line-height: 1.8; text-align: justify; overflow-y: auto; max-height: 70vh; }
+        
+        /* Warna Highlight Error */
+        mark.blank-space { background-color: #f1c40f; color: black; padding: 0 2px; border-radius: 3px; font-weight: bold; }
+        mark.double-space { background-color: #e67e22; color: white; padding: 0 2px; border-radius: 3px; }
+        mark.date-error { background-color: #e74c3c; color: white; padding: 0 2px; border-radius: 3px; font-weight: bold; }
+        mark.punct-error { background-color: #9b59b6; color: white; padding: 0 2px; border-radius: 3px; }
+        
+        .legend { font-size: 12px; margin-top: 20px; display: flex; flex-direction: column; gap: 5px; }
+        .legend span { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🔎 Proofreader Draf Akta Notaris (Sintaks & Typo)</h2>
+    
+    <div class="upload-area">
+        <p style="color: #7f8c8d; margin-top: 0;">Mendeteksi bagian rumpang, tanggal janggal, dan kesalahan format ketikan secara otomatis.</p>
+        <label class="btn-upload">
+            📂 Pilih File Draf Akta (.docx)
+            <input type="file" id="docInput" accept=".docx">
+        </label>
+        <div id="status" style="margin-top: 15px; font-weight: bold; color: #27ae60; display: none;">Menganalisis dokumen...</div>
+    </div>
+
+    <div class="dashboard" id="dashboard" style="display: none;">
+        
+        <div class="report-panel">
+            <h3>Daftar Temuan Kejanggalan</h3>
+            <div id="report-list"></div>
+            
+            <div class="legend">
+                <strong>Keterangan Warna:</strong>
+                <div><span style="background: #f1c40f;"></span> Data Rumpang / Kosong</div>
+                <div><span style="background: #e74c3c;"></span> Tanggal/Waktu Tidak Valid</div>
+                <div><span style="background: #e67e22;"></span> Spasi Ganda / Berlebih</div>
+                <div><span style="background: #9b59b6;"></span> Kesalahan Tanda Baca</div>
+            </div>
+        </div>
+
+        <div class="document-panel" id="document-view">
+            </div>
+
+    </div>
+</div>
+
+<script>
+    // Konfigurasi Mesin Pencari Pola (Regex Ruleset)
+    const RULES = [
+        {
+            id: "blank-space",
+            name: "Data Belum Diisi",
+            // Mencari titik-titik (....), garis bawah (____), atau [ ]
+            regex: /(\.{3,}|_{3,}|\[\s*\]|\<\s*\>)/g, 
+            color: "#f1c40f"
+        },
+        {
+            id: "date-error",
+            name: "Tanggal Kejanggalan",
+            // Mencari angka di atas 31 atau 30 Februari
+            regex: /\b(3[2-9]|[4-9]\d)\s+(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)\b|\b(30|31)\s+Februari\b/gi,
+            color: "#e74c3c"
+        },
+        {
+            id: "double-space",
+            name: "Spasi Ganda",
+            // Mencari spasi 2x atau lebih di antara huruf
+            regex: /([a-zA-Z0-9])(\s{2,})([a-zA-Z0-9])/g,
+            color: "#e67e22"
+        },
+        {
+            id: "punct-error",
+            name: "Spasi Sebelum Tanda Baca",
+            // Mencari format salah seperti "penjual ," atau "pembeli ."
+            regex: /(\s)([\,\.\;\:\)])/g,
+            color: "#9b59b6"
+        }
+    ];
+
+    document.getElementById('docInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const statusEl = document.getElementById('status');
+        statusEl.style.display = 'block';
+        statusEl.innerText = "⏳ Mengekstrak teks dari Word...";
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const arrayBuffer = event.target.result;
+
+            // Menggunakan Mammoth untuk mengambil HTML mentah (untuk menjaga struktur paragraf)
+            mammoth.convertToHtml({arrayBuffer: arrayBuffer})
+                .then(displayResult)
+                .catch(handleError);
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    function displayResult(result) {
+        const documentView = document.getElementById('document-view');
+        const reportList = document.getElementById('report-list');
+        const dashboard = document.getElementById('dashboard');
+        
+        let htmlText = result.value; // Ini adalah teks berformat HTML (<p>) dari Word Anda
+
+        // Objek untuk menghitung jumlah temuan
+        let counters = {
+            "blank-space": 0,
+            "date-error": 0,
+            "double-space": 0,
+            "punct-error": 0
+        };
+
+        // Eksekusi Mesin Regex
+        RULES.forEach(rule => {
+            htmlText = htmlText.replace(rule.regex, function(match, p1, p2, p3) {
+                counters[rule.id]++;
+                
+                // Khusus untuk regex yang menggunakan grup (seperti double-space)
+                if (rule.id === 'double-space') {
+                    return `${p1}<mark class="${rule.id}" title="${rule.name}">${p2}</mark>${p3}`;
+                } else if (rule.id === 'punct-error') {
+                    return `<mark class="${rule.id}" title="${rule.name}">${p1}</mark>${p2}`;
+                } else {
+                    return `<mark class="${rule.id}" title="${rule.name}">${match}</mark>`;
+                }
+            });
+        });
+
+        // Tampilkan Teks ke Layar
+        documentView.innerHTML = htmlText;
+
+        // Tampilkan Laporan di Panel Kiri
+        reportList.innerHTML = '';
+        let totalIssues = 0;
+
+        RULES.forEach(rule => {
+            const count = counters[rule.id];
+            totalIssues += count;
+            
+            const item = document.createElement('div');
+            item.className = 'issue-item';
+            item.innerHTML = `
+                <span>${rule.name}</span>
+                <span class="badge" style="background-color: ${rule.color}">${count}</span>
+            `;
+            reportList.appendChild(item);
+        });
+
+        const statusEl = document.getElementById('status');
+        if (totalIssues > 0) {
+            statusEl.style.color = "#d35400";
+            statusEl.innerText = `⚠️ Ditemukan ${totalIssues} potensi kejanggalan dalam draf.`;
+        } else {
+            statusEl.style.color = "#27ae60";
+            statusEl.innerText = `✅ Dokumen terlihat bersih dari anomali sintaks!`;
+        }
+
+        dashboard.style.display = 'flex';
+    }
+
+    function handleError(err) {
+        console.error(err);
+        const statusEl = document.getElementById('status');
+        statusEl.style.color = "#e74c3c";
+        statusEl.innerText = "❌ Gagal membaca file Word. Pastikan format file .docx bukan .doc lama.";
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="Expires" content="0">
+    <title>AJB PPAT (Strict 5 Pages A4)</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #e2e8f0; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        .left-panel { width: 38%; background: #ffffff; padding: 25px; overflow-y: auto; box-shadow: 4px 0 15px rgba(0,0,0,0.05); z-index: 10;}
+        .right-panel { width: 62%; background: #64748b; padding: 40px; overflow-y: auto; position: relative; display: flex; justify-content: center; align-items: flex-start;}
+
+        h2 { margin-top: 0; color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; font-size: 18px;}
+        .section-title { background: #f8fafc; padding: 10px 15px; font-weight: 700; font-size: 13px; margin: 25px 0 15px; border-left: 4px solid #3b82f6; color: #334155; border-radius: 0 4px 4px 0;}
+        
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;}
+        .full-width { grid-column: span 2; }
+        
+        label { display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px; text-transform: uppercase;}
+        input[type="text"], textarea { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-family: inherit; font-size: 13px; background-color: #fdfdfd;}
+        input:focus, textarea:focus { outline: none; border-color: #3b82f6; background-color: #fff;}
+        
+        .input-dinamis { background-color: #fef3c7 !important; border-color: #fde68a !important; color: #92400e; font-weight: bold;}
+        
+        .btn-group { display: flex; flex-direction: column; gap: 10px; margin-top: 30px; }
+        .btn { padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; color: white; transition: 0.2s; font-size: 14px;}
+        .btn-draft { background: #334155; } .btn-draft:hover { background: #0f172a; }
+        .btn-overprint { background: #d97706; } .btn-overprint:hover { background: #b45309; }
+
+        .zoom-controls { position: fixed; bottom: 30px; right: 30px; display: flex; gap: 10px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 100;}
+        .btn-zoom { background: #3b82f6; color: white; border: none; width: 40px; height: 40px; border-radius: 4px; font-size: 18px; font-weight: bold; cursor: pointer;}
+        .zoom-info { display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; color: #334155; min-width: 60px;}
+
+        #zoom-wrapper { transform-origin: top center; transition: transform 0.2s ease-out; margin-bottom: 50px; }
+        #pdf-master-container { display: flex; flex-direction: column; gap: 20px; } /* Jarak antar halaman di layar */
+
+        /* ========================================= */
+        /* KERTAS A4 STRICT HEIGHT (5 HALAMAN PASTI) */
+        /* ========================================= */
+        .kertas-halaman {
+            width: 210mm;
+            height: 297mm; /* Kunci mati ukuran kertas, tidak boleh min-height */
+            background: white;
+            padding: 20mm 20mm 20mm 30mm; /* Kiri 3cm untuk jilid */
+            box-sizing: border-box;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 12pt;
+            line-height: 1.5;
+            text-align: justify;
+            position: relative;
+            /* Memaksa pemotongan halaman PDF di elemen ini */
+            page-break-after: always; 
+        }
+
+        .kop-surat { text-align: center; margin-bottom: 15px;}
+        .kop-nama { font-weight: bold; font-size: 14pt; margin: 0;}
+        .judul-akta { text-align: center; font-weight: bold; margin: 15px 0; font-size: 14pt;}
+        
+        .dinamis { background-color: rgba(245, 158, 11, 0.2); border-bottom: 1px dotted #d97706; padding: 0 2px;}
+
+        p { margin-top: 0; margin-bottom: 10px; }
+        
+        .tabel-letak { margin-left: 40px; margin-bottom: 10px;}
+        .tabel-letak td { padding: 0; vertical-align: top; }
+        .col-1 { width: 120px; }
+        .col-2 { width: 15px; }
+
+        /* FOOTER ABSOLUT DI DASAR SETIAP HALAMAN */
+        .kertas-footer {
+            position: absolute;
+            bottom: 20mm;
+            left: 30mm;
+            right: 20mm;
+            border-top: 1px solid black;
+            padding-top: 5px;
+            font-size: 10pt;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+
+<div class="left-panel">
+    <h2><span style="font-size: 20px;">📜</span> Formulir AJB 5 Halaman</h2>
+    
+    <div class="section-title">I. Pihak Pertama (Penjual)</div>
+    <div class="form-grid">
+        <div class="full-width"><label>Nama Lengkap</label><input type="text" id="in-p1-nama" value="AKHMAD ZAIDIN" oninput="updateKertas()"></div>
+        <div><label>Tempat, Tgl Lahir</label><input type="text" id="in-p1-ttl" value="Yogyakarta pada tanggal 25 Mei 1959" oninput="updateKertas()"></div>
+        <div><label>Pekerjaan</label><input type="text" id="in-p1-kerja" value="Buruh Harian Lepas" oninput="updateKertas()"></div>
+        <div class="full-width"><label>Alamat Lengkap</label><textarea id="in-p1-alamat" rows="2" oninput="updateKertas()">Srodokan Bakalan, Rukun Tetangga 004, Rukun Warga 030, Kelurahan/Desa Argomulyo, Kecamatan Cangkringan, Kabupaten Sleman, Provinsi Daerah Istimewa Yogyakarta</textarea></div>
+        <div class="full-width"><label>NIK / KTP</label><input type="text" id="in-p1-nik" value="3329042505590003" oninput="updateKertas()"></div>
+        <div class="full-width"><label>Asal Usul Tanah</label><input type="text" id="in-p1-asal" value="diperoleh dari pembagian harta warisan" oninput="updateKertas()"></div>
+    </div>
+
+    <div class="section-title">II. Pihak Kedua (Pembeli)</div>
+    <div class="form-grid">
+        <div class="full-width"><label>Nama Lengkap</label><input type="text" id="in-p2-nama" value="SURADI" oninput="updateKertas()"></div>
+        <div><label>Tempat, Tgl Lahir</label><input type="text" id="in-p2-ttl" value="Sleman pada tanggal 05 April 1967" oninput="updateKertas()"></div>
+        <div><label>Pekerjaan</label><input type="text" id="in-p2-kerja" value="Karyawan Swasta" oninput="updateKertas()"></div>
+        <div class="full-width"><label>Alamat Lengkap</label><textarea id="in-p2-alamat" rows="2" oninput="updateKertas()">Mancasan Lor Dero, Rukun Tetangga 004, Rukun Warga 015, Kelurahan/Desa Condongcatur, Kecamatan Depok, Kabupaten Sleman, Provinsi Daerah Istimewa Yogyakarta</textarea></div>
+        <div class="full-width"><label>NIK / KTP</label><input type="text" id="in-p2-nik" value="3404070504670004" oninput="updateKertas()"></div>
+    </div>
+
+    <div class="section-title">III. Objek Jual Beli</div>
+    <div class="form-grid">
+        <div class="full-width"><label>NIB & Status</label><input type="text" id="in-obj-nib" value="Sertipikat Hak Milik NIB: 13.04.000033298.0" oninput="updateKertas()"></div>
+        <div><label>Luas (Angka & Huruf)</label><input type="text" id="in-obj-luas" value="273 m2 (dua ratus tujuh puluh tiga meter persegi)" oninput="updateKertas()"></div>
+        <div><label>Nomor Seri & Edisi</label><input type="text" id="in-obj-seri" value="Nomor Seri: A7014917, Edisi 1 / Pewarisan" oninput="updateKertas()"></div>
+        <div class="full-width"><label>SPPT PBB (NOP)</label><input type="text" id="in-obj-pbb" value="34.04.110.004.021.0011.0" oninput="updateKertas()"></div>
+        <div><label>Provinsi</label><input type="text" id="in-obj-prov" value="Daerah Istimewa Yogyakarta" oninput="updateKertas()"></div>
+        <div><label>Kabupaten</label><input type="text" id="in-obj-kab" value="Sleman" oninput="updateKertas()"></div>
+        <div><label>Kecamatan</label><input type="text" id="in-obj-kec" value="Ngemplak" oninput="updateKertas()"></div>
+        <div><label>Desa/Kelurahan</label><input type="text" id="in-obj-desa" value="Bimomartani" oninput="updateKertas()"></div>
+    </div>
+
+    <div class="section-title" style="border-left-color: #d97706;">IV. Data Dinamis (Cetak Susulan)</div>
+    <div class="form-grid">
+        <div class="full-width">
+            <label>Nomor Akta</label>
+            <input type="text" class="input-dinamis" id="in-nomor" value="106/2025" oninput="updateKertas()">
+        </div>
+        <div class="full-width">
+            <label>Tanggal Pelaksanaan</label>
+            <textarea class="input-dinamis" id="in-tgl" rows="2" oninput="updateKertas()">Jum'at tanggal 14 (empat belas) bulan November tahun 2025 (dua ribu dua puluh lima)</textarea>
+        </div>
+        <div class="full-width">
+            <label>Harga Transaksi (Angka)</label>
+            <input type="text" class="input-dinamis" id="in-harga-angka" value="95.550.000,00" oninput="updateKertas()">
+        </div>
+        <div class="full-width">
+            <label>Harga (Terbilang)</label>
+            <textarea class="input-dinamis" id="in-harga-huruf" rows="2" oninput="updateKertas()">sembilan puluh lima juta lima ratus lima puluh ribu rupiah</textarea>
+        </div>
+        <div class="full-width">
+            <label>Tanggal Pernyataan (Pasal 3)</label>
+            <input type="text" class="input-dinamis" id="in-tgl-pasal3" value="14 November 2025" oninput="updateKertas()">
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <button class="btn btn-draft" onclick="cetakDraft()"><i class="fa-solid fa-print"></i> 1. Cetak Blangko Kertas A4 (Untuk Booklet A3)</button>
+        <button class="btn btn-overprint" onclick="cetakOverprint()"><i class="fa-solid fa-crosshairs"></i> 2. Cetak Data Susulan (Overprint)</button>
+    </div>
+</div>
+
+<div class="right-panel">
+    <div class="zoom-controls">
+        <button class="btn-zoom" onclick="zoomOut()">-</button>
+        <div class="zoom-info" id="zoom-level">80%</div>
+        <button class="btn-zoom" onclick="zoomIn()">+</button>
+    </div>
+
+    <div id="zoom-wrapper">
+        <!-- MASTER CONTAINER -->
+        <div id="pdf-master-container">
+            
+            <!-- HALAMAN 1 -->
+            <div class="kertas-halaman">
+                <div class="kop-surat">
+                    <div>PEJABAT PEMBUAT AKTA TANAH<br>(PPAT)</div>
+                    <div class="kop-nama">ENDRI PURWANI, S.H., MKn</div>
+                    <div>DAERAH KERJA KABUPATEN SLEMAN</div>
+                    <div style="font-size: 11pt; margin-top: 5px;">SK. Kepala Badan Pertanahan Nasional Republik Indonesia<br>Nomor: 156/KEP-17.3/VII/2014 Tanggal 08 Juli 2014</div>
+                    <div style="font-size: 11pt;">Alamat: Jl. Palagan Tentara Pelajar KM 8,5 Nomor: 119, Sariharjo, Ngaglik, Sleman-Yogyakarta 55581.<br>Telepon (0274) 4532737, HP: 087739207960</div>
+                </div>
+
+                <div class="judul-akta">
+                    AKTA JUAL BELI<br>
+                    <span style="font-weight: normal; font-size: 12pt;">Nomor: <span class="dinamis" id="out-nomor"></span><br>Lembar Pertama</span>
+                </div>
+
+                <p>Pada hari ini, <span class="dinamis" id="out-tgl"></span> hadir dihadapan saya ENDRI PURWANI, Sarjana Hukum, Magister Kenotariatan, yang berdasarkan Surat Keputusan Kepala Badan Pertanahan Nasional Republik Indonesia, tanggal 08 Juli 2014 nomor 156/KEP-17.3/VII/2014, diangkat sebagai Pejabat Pembuat Akta Tanah, yang selanjutnya disebut PPAT, yang dimaksud dalam pasal 7 Peraturan Pemerintah Nomor 24 Tahun 1997 tentang Pendaftaran tanah, dengan daerah kerja Kabupaten Sleman, dan berkantor di Jalan Palagan Tentara Pelajar KM 8,5 Nomor 119, Sariharjo, Ngaglik, Sleman, dengan dihadiri oleh saksi-saksi yang saya kenal dan akan disebut pada bagian akhir akta ini :</p>
+                <p>I. Tuan <b><span id="out-p1-nama"></span></b>, lahir di <span id="out-p1-ttl"></span>, Warga Negara Indonesia, Pekerjaan <span id="out-p1-kerja"></span>, bertempat tinggal di <span id="out-p1-alamat"></span>, pemegang Kartu Tanda Penduduk nomor : <span id="out-p1-nik"></span>.</p>
+
+                <!-- FOOTER HALAMAN 1 -->
+                <div class="kertas-footer">
+                    <div style="width: 33%; text-align: left;">Akta Jual Beli</div>
+                    <div style="width: 33%; text-align: center;">ENDRI PURWANI, SH, MKn<br>Daerah Kerja Kabupaten Sleman</div>
+                    <div style="width: 33%; text-align: right;">Halaman 1 dari 5 Halaman</div>
+                </div>
+            </div>
+
+            <!-- HALAMAN 2 -->
+            <div class="kertas-halaman">
+                <p>Untuk melakukan tindakan hukum dalam akta ini tidak memerlukan persetujuan dari siapapun juga karena tanah yang hendak dialihkan <span id="out-p1-asal"></span>.--</p>
+                <p>Selaku Penjual, untuk selanjutnya disebut :<br><b>= PIHAK PERTAMA =</b></p>
+
+                <p>II. Tuan <b><span id="out-p2-nama"></span></b>, lahir di <span id="out-p2-ttl"></span>, Pekerjaan <span id="out-p2-kerja"></span>, Warga Negara Indonesia, bertempat tinggal di <span id="out-p2-alamat"></span>, pemegang Kartu Tanda Penduduk nomor: <span id="out-p2-nik"></span>.---</p>
+                <p>Selaku Pembeli, untuk selanjutnya disebut :<br><b>= PIHAK KEDUA =</b></p>
+
+                <p>Para penghadap dikenal oleh saya, Pejabat Pembuat Akta Tanah (PPAT),.</p>
+                <p>Pihak Pertama menerangkan dengan ini menjual kepada pihak Kedua dan Pihak kedua menerangkan dengan ini membeli dari Pihak Pertama:</p>
+                <p><span id="out-obj-nib"></span>, atas sebidang tanah seluas <span id="out-obj-luas"></span>, <span id="out-obj-seri"></span>, dengan Surat Pemberitahuan Pajak Terhutang Pajak Bumi dan Bangunan (SPPTPBB) Nomor Objek Pajak (NOP): <span id="out-obj-pbb"></span>.---</p>
+                
+                <p>Terletak di:</p>
+                <table class="tabel-letak">
+                    <tr><td class="col-1">Provinsi</td><td class="col-2">:</td><td><span id="out-obj-prov"></span>;</td></tr>
+                    <tr><td class="col-1">Kabupaten</td><td class="col-2">:</td><td><span id="out-obj-kab"></span>;</td></tr>
+                    <tr><td class="col-1">Kecamatan</td><td class="col-2">:</td><td><span id="out-obj-kec"></span>;</td></tr>
+                    <tr><td class="col-1">Desa/Kelurahan</td><td class="col-2">:</td><td><span id="out-obj-desa"></span>;</td></tr>
+                </table>
+
+                <p>Jual beli ini meliputi pula :<br>Segala sesuatu yang tumbuh, tertanam dan berdiri di atas tanah tersebut yang karena jenis dan sifatnya menurut ketetapan Undang-undang dapat dianggap sebagai benda tetap tanpa kecuali.</p>
+                <p>Selanjutnya semua yang diuraikan diatas dalam akta ini disebut "Objek Jual Beli".</p>
+
+                <!-- FOOTER HALAMAN 2 -->
+                <div class="kertas-footer">
+                    <div style="width: 33%; text-align: left;">Akta Jual Beli</div>
+                    <div style="width: 33%; text-align: center;">ENDRI PURWANI, SH, MKn<br>Daerah Kerja Kabupaten Sleman</div>
+                    <div style="width: 33%; text-align: right;">Halaman 2 dari 5 Halaman</div>
+                </div>
+            </div>
+
+            <!-- HALAMAN 3 -->
+            <div class="kertas-halaman">
+                <p>Pihak Pertama dan Pihak Kedua menerangkan bahwa :</p>
+                <div style="padding-left: 20px;">
+                    <div style="display: flex;"><div style="width: 20px;">a.</div><div>Jual beli ini dilakukan dengan harga Rp. <span class="dinamis" id="out-harga-angka"></span>---- (<span class="dinamis" id="out-harga-huruf"></span>).</div></div>
+                    <div style="display: flex; margin-top: 5px;"><div style="width: 20px;">b.</div><div>Pihak Pertama mengaku telah menerima sepenuhnya uang tersebut diatas dari Pihak Kedua dan untuk penerimaan uang tersebut akta ini berlaku pula sebagai tanda penerimaan yang sah (kuitansi).</div></div>
+                    <div style="display: flex; margin-top: 5px;"><div style="width: 20px;">c.</div><div>Jual beli ini dilakukan dengan syarat-syarat sebagai berikut :</div></div>
+                </div>
+
+                <p style="text-align: center; font-weight: bold; margin: 15px 0 5px;">Pasal 1</p>
+                <p>Mulai hari ini Objek Jual beli yang diuraikan dalam akta ini telah menjadi milik Pihak Kedua dan karenanya segala keuntungan yang didapat dari, dan segala kerugian/beban objek jual beli tersebut di atas menjadi hak/beban Pihak Kedua.</p>
+
+                <p style="text-align: center; font-weight: bold; margin: 15px 0 5px;">Pasal 2</p>
+                <p>Pihak Pertama menjamin, bahwa objek jual beli tersebut di atas tidak tersangkut dalam suatu sengketa, bebas dari sitaan, tidak terikat sebagai jaminan untuk sesuatu utang yang tidak tercatat dalam sertipikat, dan bebas dari beban-beban lainnya yang berupa apapun.</p>
+
+                <p style="text-align: center; font-weight: bold; margin: 15px 0 5px;">Pasal 3</p>
+                <p>Pihak Kedua dengan ini menyatakan bahwa dengan jual beli ini kepemilikan tanahnya tidak melebihi ketentuan maksimum penguasaan tanah menurut ketentuan Perundang-Undangan yang berlaku sebagaimana tercantum dalam pernyataannya tanggal <span class="dinamis" id="out-tgl-pasal3"></span>.-</p>
+
+                <p style="text-align: center; font-weight: bold; margin: 15px 0 5px;">Pasal 4</p>
+                <p>Dalam hal terdapat perbedaan luas tanah yang menjadi objek jual beli dalam akta ini dengan hasil pengukuran oleh instansi Badan Pertanahan Nasional, maka para pihak akan menerima hasil pengukuran instansi Badan Pertanahan Nasional tersebut dengan tidak memperhitungkan kembali harga jual beli dan tidak akan saling mengadakan gugatan.</p>
+
+                <p style="text-align: center; font-weight: bold; margin: 15px 0 5px;">Pasal 5</p>
+                <p>Kedua belah pihak dalam hal ini dengan segala akibatnya memilih tempat kediaman hukum yang umum dan tidak berubah pada Kantor Panitera Pengadilan Negeri Kabupaten Sleman.</p>
+
+                <p style="text-align: center; font-weight: bold; margin: 15px 0 5px;">Pasal 6</p>
+                
+                <!-- FOOTER HALAMAN 3 -->
+                <div class="kertas-footer">
+                    <div style="width: 33%; text-align: left;">Akta Jual Beli</div>
+                    <div style="width: 33%; text-align: center;">ENDRI PURWANI, SH, MKn<br>Daerah Kerja Kabupaten Sleman</div>
+                    <div style="width: 33%; text-align: right;">Halaman 3 dari 5 Halaman</div>
+                </div>
+            </div>
+
+            <!-- HALAMAN 4 -->
+            <div class="kertas-halaman">
+                <p>Biaya pembuatan akta ini, uang saksi dan segala biaya peralihan hak dibayar oleh Pihak Pertama dan Pihak Kedua.</p>
+                <p>Demikian akta ini dibuat dihadapan para pihak dan:</p>
+                <p>1. Nyonya YUNITA RAHAYU, lahir di Sleman pada tanggal 27 Juni 1998, Warga Negara Indonesia, bertempat tinggal di Plumbon Kidul, - Rukun Tetangga 001, Rukun Warga 013, Kelurahan/Desa Mororejo, Kecamatan Tempel, Kabupaten Sleman, Provinsi Daerah Istimewa Yogyakarta, pemegang Kartu Tanda Penduduk nomor: 3404146706980002;-</p>
+                <p>2. Nyonya SITI HANDATUL ISTIKOMAH, lahir di Sleman pada tanggal 11 Desember 1984, Warga Negara Indonesia, bertempat tinggal di Mangsel VIII, Rukun Tetangga 010, Rukun Warga 016, Kelurahan/Desa Margomulyo, Kecamatan Seyegan, Kabupaten Sleman, Provinsi Daerah Istimewa Yogyakarta, pemegang Kartu Tanda Penduduk nomor: 3404125112840001.</p>
+                <p>Keduanya Pegawai Kantor PPAT, sebagai saksi-saksi, dan setelah dibacakan serta dijelaskan, maka sebagai bukti kebenaran pernyataan yang dikemukakan oleh Pihak Pertama dan Pihak Kedua tersebut di atas, akta ini ditandatangani oleh Pihak Pertama, Pihak Kedua, para saksi dan saya PPAT, sebanyak 2 (dua) rangkap asli, yaitu 1 (satu) rangkap lembar pertama disimpan di kantor saya, dan 1 (satu) rangkap lembar kedua disampaikan kepada Kepala Kantor Pertanahan Kabupaten Sleman untuk keperluan pendaftaran peralihan hak akibat jual beli dalam akta ini.</p>
+
+                <div style="display: flex; justify-content: space-between; text-align: center; margin-top: 40px;">
+                    <div style="width: 45%;">Pihak Pertama<br><br><br><br><br>Tn. <b><span id="ttd-p1"></span></b></div>
+                    <div style="width: 45%;">Pihak Kedua<br><br><br><br><br>Tn. <b><span id="ttd-p2"></span></b></div>
+                </div>
+
+                <!-- FOOTER HALAMAN 4 -->
+                <div class="kertas-footer">
+                    <div style="width: 33%; text-align: left;">Akta Jual Beli</div>
+                    <div style="width: 33%; text-align: center;">ENDRI PURWANI, SH, MKn<br>Daerah Kerja Kabupaten Sleman</div>
+                    <div style="width: 33%; text-align: right;">Halaman 4 dari 5 Halaman</div>
+                </div>
+            </div>
+
+            <!-- HALAMAN 5 -->
+            <div class="kertas-halaman">
+                <div style="display: flex; justify-content: space-between; text-align: center; margin-top: 20px;">
+                    <div style="width: 45%;">Saksi<br><br><br><br><br>Ny. <b>YUNITA RAHAYU</b></div>
+                    <div style="width: 45%;">Saksi<br><br><br><br><br>Ny. <b>SITI HANDATUL ISTIKOMAH</b></div>
+                </div>
+                <div style="text-align: center; margin-top: 50px;">
+                    Pejabat Pembuat Akta Tanah<br><br><br><br><br><br>
+                    <b>ENDRI PURWANI, S.H., M.Kn</b>
+                </div>
+
+                <!-- FOOTER HALAMAN 5 -->
+                <div class="kertas-footer">
+                    <div style="width: 33%; text-align: left;">Akta Jual Beli</div>
+                    <div style="width: 33%; text-align: center;">ENDRI PURWANI, SH, MKn<br>Daerah Kerja Kabupaten Sleman</div>
+                    <div style="width: 33%; text-align: right;">Halaman 5 dari 5 Halaman</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    function updateKertas() {
+        const fields = [
+            'p1-nama', 'p1-ttl', 'p1-kerja', 'p1-alamat', 'p1-nik', 'p1-asal',
+            'p2-nama', 'p2-ttl', 'p2-kerja', 'p2-alamat', 'p2-nik',
+            'obj-nib', 'obj-luas', 'obj-seri', 'obj-pbb', 'obj-prov', 'obj-kab', 'obj-kec', 'obj-desa',
+            'nomor', 'tgl', 'tgl-pasal3', 'harga-angka', 'harga-huruf'
+        ];
+
+        fields.forEach(f => {
+            const elIn = document.getElementById(`in-${f}`);
+            // Menggunakan querySelectorAll agar semua span dengan ID tersebut ikut terupdate
+            const elsOut = document.querySelectorAll(`#out-${f}`);
+            elsOut.forEach(elOut => {
+                if(elIn) elOut.innerText = elIn.value;
+            });
+        });
+
+        document.getElementById('ttd-p1').innerText = document.getElementById('in-p1-nama').value;
+        document.getElementById('ttd-p2').innerText = document.getElementById('in-p2-nama').value;
+    }
+
+    let currentScale = 0.8;
+    const zoomWrapper = document.getElementById('zoom-wrapper');
+    const zoomLevelText = document.getElementById('zoom-level');
+
+    function applyZoom() {
+        zoomWrapper.style.transform = `scale(${currentScale})`;
+        zoomLevelText.innerText = Math.round(currentScale * 100) + '%';
+    }
+
+    function zoomIn() { if (currentScale < 1.5) { currentScale += 0.05; applyZoom(); } }
+    function zoomOut() { if (currentScale > 0.3) { currentScale -= 0.05; applyZoom(); } }
+
+    updateKertas(); applyZoom();
+
+    const getPdfConfig = (filename) => {
+        return {
+            margin: 0,
+            filename: filename,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+    };
+
+    function cetakDraft() {
+        const masterContainer = document.getElementById('pdf-master-container');
+        const elemenDinamis = document.querySelectorAll('.dinamis');
+
+        elemenDinamis.forEach(el => {
+            el.style.backgroundColor = 'transparent';
+            el.style.borderBottom = 'none';
+            el.style.visibility = 'hidden'; 
+        });
+
+        const tempScale = currentScale; currentScale = 1; applyZoom();
+
+        html2pdf().set(getPdfConfig('1_Blangko_AJB_5_Halaman.pdf')).from(masterContainer).save().then(() => {
+            currentScale = tempScale; applyZoom();
+            elemenDinamis.forEach(el => {
+                el.style.backgroundColor = '';
+                el.style.borderBottom = '';
+                el.style.visibility = '';
+            });
+        });
+    }
+
+    function cetakOverprint() {
+        const masterContainer = document.getElementById('pdf-master-container');
+        const elemenDinamis = document.querySelectorAll('.dinamis');
+
+        masterContainer.style.visibility = 'hidden';
+        elemenDinamis.forEach(el => {
+            el.style.backgroundColor = 'transparent';
+            el.style.borderBottom = 'none';
+            el.style.visibility = 'visible'; 
+        });
+
+        const tempScale = currentScale; currentScale = 1; applyZoom();
+
+        html2pdf().set(getPdfConfig('2_Teks_Susulan_Overprint.pdf')).from(masterContainer).save().then(() => {
+            currentScale = tempScale; applyZoom();
+            masterContainer.style.visibility = '';
+            elemenDinamis.forEach(el => {
+                el.style.backgroundColor = '';
+                el.style.borderBottom = '';
+                el.style.visibility = '';
+            });
+        });
+    }
+</script>
+
+</body>
+</html>

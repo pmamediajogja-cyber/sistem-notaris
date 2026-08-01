@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="Expires" content="0">
+    <title>Buku Register Pelacakan Berkas Notaris</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; background-color: #f1f5f9; color: #334155; display: flex; flex-direction: column; height: 100vh; overflow: hidden;}
+        
+        .top-toolbar { background: white; padding: 20px 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+        .page-title { margin: 0; font-size: 20px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 10px; }
+        
+        .action-bar { display: flex; gap: 15px; align-items: center;}
+        .search-box { position: relative; }
+        .search-box input { padding: 10px 15px 10px 35px; width: 300px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 14px; background: #f8fafc;}
+        .search-box input:focus { outline: none; border-color: #3b82f6; background: white;}
+        .search-box i { position: absolute; left: 12px; top: 12px; color: #94a3b8; }
+        
+        .btn-tambah { background: #2563eb; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 14px; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2); transition: 0.2s;}
+        .btn-tambah:hover { background: #1d4ed8; transform: translateY(-2px); }
+
+        .table-container { flex: 1; padding: 25px 30px; overflow-y: auto; }
+        .table-card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; overflow: hidden;}
+        
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        thead { background-color: #f8fafc; border-bottom: 2px solid #e2e8f0; }
+        th { padding: 16px 20px; font-weight: 700; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;}
+        td { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; font-size: 14px; vertical-align: top;}
+        tbody tr:hover { background-color: #f8fafc; }
+
+        .td-klien { font-weight: 700; color: #0f172a; margin-bottom: 8px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 6px;}
+        .td-objek { font-size: 12px; color: #64748b; margin-bottom: 8px; display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; border-bottom: 1px dashed #e2e8f0; padding-bottom: 6px;}
+        .badge-layanan { background: #eff6ff; color: #2563eb; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; border: 1px solid #bfdbfe; white-space: nowrap; display: inline-block;}
+        
+        .status-box { font-weight: 700; font-size: 13px; color: #0f172a; background: #f1f5f9; padding: 6px 12px; border-radius: 6px; border-left: 4px solid #94a3b8; display: inline-block; line-height: 1.4;}
+        .catatan-box { font-size: 12px; color: #b45309; background: #fffbeb; padding: 6px 10px; border-radius: 4px; margin-top: 8px; font-style: italic;}
+        
+        .time-tracker { margin-top: 8px; font-size: 11px; color: #e11d48; font-weight: 700; display: flex; align-items: center; gap: 5px; background: #fff1f2; padding: 4px 8px; border-radius: 4px; width: fit-content; border: 1px solid #fecdd3;}
+        .time-success { color: #059669; background: #ecfdf5; border-color: #a7f3d0;}
+
+        .btn-update { background: #f1f5f9; color: #3b82f6; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 12px; cursor: pointer; transition: 0.2s; white-space: nowrap;}
+        .btn-update:hover { background: #3b82f6; color: white; border-color: #3b82f6;}
+
+        /* MODAL KHUSUS DINAMIS */
+        #modal-form { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.8); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+        .modal-content { background: white; width: 95%; max-width: 1000px; border-radius: 16px; padding: 30px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); height: 95vh; display: flex; flex-direction: column;}
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px; flex-shrink: 0;}
+        .modal-header h3 { margin: 0; font-size: 20px; color: #0f172a; }
+        .btn-close { background: none; border: none; font-size: 20px; color: #94a3b8; cursor: pointer; }
+        
+        .modal-body-split { display: flex; gap: 30px; flex: 1; overflow: hidden; }
+        .form-section { flex: 2; overflow-y: auto; padding-right: 15px; } 
+        .history-section { flex: 1; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; overflow-y: auto;}
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group.full { grid-column: span 2; }
+        label { display: block; font-size: 13px; font-weight: 700; color: #475569; margin-bottom: 6px; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 13px; background: #fff;}
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #3b82f6;}
+        
+        .status-input-container { background: #eff6ff; padding: 15px; border-radius: 8px; border: 1px solid #bfdbfe; }
+        .status-input-container label { color: #1e40af; }
+        .status-input-container input { border-color: #93c5fd; font-weight: bold; color: #1e3a8a;}
+
+        /* CSS KHUSUS DYNAMIC BOX (Klien & Objek) */
+        .dynamic-box { background: #f8fafc; border: 1px dashed #cbd5e1; padding: 15px; border-radius: 8px; margin-bottom: 10px; position: relative;}
+        .btn-tambah-baris { background: transparent; border: 2px dashed #94a3b8; color: #475569; width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s;}
+        .btn-tambah-baris:hover { background: #e2e8f0; border-color: #64748b; color: #0f172a;}
+        .btn-hapus-box { position: absolute; top: 15px; right: 15px; background: #fee2e2; color: #e11d48; border: none; width: 25px; height: 25px; border-radius: 4px; cursor: pointer; font-size: 12px;}
+        
+        .chk-group { margin-top: 10px; display: flex; gap: 12px; flex-wrap: wrap; background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
+        .chk-group label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; margin: 0; color: #334155; cursor: pointer;}
+        .chk-group input { width: 14px; height: 14px; cursor: pointer; }
+
+        .objek-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
+
+        /* TIMELINE UI (Jejak Rekam) */
+        .history-title { margin-top: 0; font-size: 14px; color: #0f172a; margin-bottom: 15px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;}
+        .timeline { margin-left: 10px; border-left: 2px solid #cbd5e1; padding-left: 15px; position: relative; }
+        .tl-item { position: relative; margin-bottom: 15px; }
+        .tl-item::before { content: ''; position: absolute; left: -22px; top: 2px; width: 10px; height: 10px; border-radius: 50%; background: #3b82f6; border: 2px solid white; box-shadow: 0 0 0 1px #cbd5e1;}
+        .tl-status { font-weight: bold; font-size: 13px; color: #334155; }
+        .tl-waktu { font-size: 11px; color: #94a3b8; margin-top: 2px;}
+        .tl-durasi { font-size: 11px; color: #b45309; background: #fef3c7; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 5px; font-weight: 600;}
+        .tl-item.first::before { background: #10b981; } 
+
+        .modal-footer { display: flex; justify-content: space-between; margin-top: 15px; border-top: 2px solid #f1f5f9; padding-top: 15px; flex-shrink: 0;}
+        .btn-save { background: #10b981; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 14px;}
+        .btn-hapus { background: #fee2e2; color: #e11d48; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 700; display: none;}
+    </style>
+</head>
+<body>
+
+    <div class="top-toolbar">
+        <h2 class="page-title"><i class="fa-solid fa-star" style="color: #f59e0b;"></i> Register VIP: Bu Dian Yasmin</h2>
+        <div class="action-bar">
+            <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="search-input" placeholder="Cari NIB, Nama Klien, SHM, Status..." onkeyup="filterTable()">
+            </div>
+            <button class="btn-tambah" onclick="bukaModal()"><i class="fa-solid fa-plus"></i> Tambah Berkas Baru</button>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <div class="table-card">
+            <table id="tabel-berkas">
+                <thead>
+                    <tr>
+                        <th style="width: 15%;">Ref / Layanan</th>
+                        <th style="width: 25%;">Daftar Pihak & Kelengkapan</th>
+                        <th style="width: 25%;">Daftar Objek (Alas Hak)</th>
+                        <th style="width: 25%;">Posisi & SLA Pengendapan</th>
+                        <th style="width: 10%; text-align: center;">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <tr><td colspan="5" style="text-align: center; padding: 40px; color: #94a3b8;">Memuat data dari server...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="modal-form">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Input Berkas Baru</h3>
+                <button class="btn-close" onclick="tutupModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <input type="hidden" id="in-id">
+            
+            <div class="modal-body-split">
+                <div class="form-section">
+                    <div class="form-grid">
+                        <div class="form-group full status-input-container">
+                            <label><i class="fa-solid fa-location-crosshairs"></i> Posisi / Status Berkas Saat Ini</label>
+                            <input type="text" id="in-status" list="saran-status" placeholder="Ketik status terkini...">
+                            <datalist id="saran-status">
+                                <option value="Berkas Masuk (Kurang Syarat)"></option>
+                                <option value="Proses Pajak (Validasi/NTPD)"></option>
+                                <option value="Drafting Akta"></option>
+                                <option value="Menunggu Tanda Tangan"></option>
+                                <option value="Proses Loket BPN"></option>
+                                <option value="Selesai & Diserahkan Klien"></option>
+                            </datalist>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Ref / Tanda Terima</label>
+                            <input type="text" id="in-no">
+                        </div>
+                        <div class="form-group">
+                            <label>Jenis Layanan</label>
+                            <input type="text" id="in-jenis" list="saran-layanan">
+                            <datalist id="saran-layanan">
+                                <option value="Akta Jual Beli (AJB)"></option>
+                                <option value="Turun Waris"></option>
+                                <option value="Pecah / Gabung SHM"></option>
+                                <option value="Pendirian PT / CV"></option>
+                            </datalist>
+                        </div>
+
+                        <div class="form-group full">
+                            <label><i class="fa-solid fa-users"></i> Pihak Terlibat (Klien / Ahli Waris)</label>
+                            <div id="klien-container"></div>
+                            <button type="button" class="btn-tambah-baris" onclick="addKlien()">+ Tambah Pihak Baru</button>
+                        </div>
+
+                        <div class="form-group full">
+                            <label><i class="fa-solid fa-map-location-dot"></i> Daftar Objek / Alas Hak</label>
+                            <div id="objek-container"></div>
+                            <button type="button" class="btn-tambah-baris" onclick="addObjek()">+ Tambah Objek Baru</button>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Tanggal Masuk</label>
+                            <input type="date" id="in-tgl-masuk">
+                        </div>
+                        <div class="form-group">
+                            <label>Rencana TTD</label>
+                            <input type="date" id="in-tgl-ttd">
+                        </div>
+
+                        <div class="form-group full">
+                            <label>Catatan Internal</label>
+                            <textarea id="in-catatan" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="history-section" id="box-riwayat">
+                    <h4 class="history-title"><i class="fa-solid fa-stopwatch"></i> SLA / Riwayat Perjalanan</h4>
+                    <div id="timeline-container" class="timeline"></div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-hapus" id="btn-hapus" onclick="hapusBerkas()"><i class="fa-solid fa-trash"></i> Hapus Arsip</button>
+                <button class="btn-save" onclick="simpanBerkas()"><i class="fa-solid fa-floppy-disk"></i> Simpan Update</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // IDENTITAS KLIEN: ID unik untuk session browser staf agar fitur gembok (Pessimistic Locking) berfungsi akurat.
+        const clientId = sessionStorage.getItem('notaris_client_id') || Math.random().toString(36).substr(2, 9);
+        sessionStorage.setItem('notaris_client_id', clientId);
+
+        let rawData = [];
+
+        // --- SISTEM DINAMIS PIHAK & OBJEK ---
+        function addKlien(data = null) {
+            const container = document.getElementById('klien-container');
+            const idx = container.children.length + 1;
+            const div = document.createElement('div');
+            div.className = 'dynamic-box';
+            
+            div.innerHTML = `
+                <button type="button" class="btn-hapus-box" onclick="this.parentElement.remove()" title="Hapus Pihak"><i class="fa-solid fa-xmark"></i></button>
+                <div style="font-weight:700; font-size:12px; margin-bottom:8px; color:#3b82f6;">PIHAK ${idx}</div>
+                <input type="text" class="k-nama" placeholder="Nama Lengkap Klien / Ahli Waris..." value="${data ? data.nama : ''}">
+                <div class="chk-group">
+                    <label><input type="checkbox" class="k-ktp" ${data && data.ktp ? 'checked' : ''}> KTP</label>
+                    <label><input type="checkbox" class="k-kk" ${data && data.kk ? 'checked' : ''}> KK</label>
+                    <label><input type="checkbox" class="k-nikah" ${data && data.nikah ? 'checked' : ''}> Buku Nikah</label>
+                    <label><input type="checkbox" class="k-lahir" ${data && data.lahir ? 'checked' : ''}> Akta Lahir</label>
+                    <label><input type="checkbox" class="k-kematian" ${data && data.kematian ? 'checked' : ''}> Akta Kematian</label>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        function addObjek(data = null) {
+            const container = document.getElementById('objek-container');
+            const idx = container.children.length + 1;
+            const div = document.createElement('div');
+            div.className = 'dynamic-box';
+            
+            div.innerHTML = `
+                <button type="button" class="btn-hapus-box" onclick="this.parentElement.remove()" title="Hapus Objek"><i class="fa-solid fa-xmark"></i></button>
+                <div style="font-weight:700; font-size:12px; margin-bottom:8px; color:#8b5cf6;">OBJEK ${idx}</div>
+                <div class="objek-grid">
+                    <input type="text" class="o-hak" placeholder="Alas Hak (Contoh: SHM 1234)" value="${data ? data.hak : ''}">
+                    <input type="text" class="o-nama" placeholder="Tercatat Atas Nama..." value="${data ? data.nama : ''}">
+                    <input type="text" class="o-pbb" placeholder="NOP PBB..." value="${data ? data.pbb : ''}">
+                    <input type="text" class="o-luas" placeholder="Luas (M2)..." value="${data ? data.luas : ''}">
+                    <input type="text" class="o-alamat" placeholder="Alamat Letak Objek / Desa..." style="grid-column: span 2;" value="${data ? data.alamat : ''}">
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        // --- SISTEM SLA WAKTU ---
+        function hitungDurasi(timeStart, timeEnd) {
+            const start = new Date(timeStart);
+            const end = new Date(timeEnd);
+            const diffMs = end - start;
+            if (diffMs < 0) return "0 Menit";
+            
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const diffHrs = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+            let str = [];
+            if (diffDays > 0) str.push(`${diffDays} hr`);
+            if (diffHrs > 0) str.push(`${diffHrs} jm`);
+            if (diffDays === 0 && diffMins > 0) str.push(`${diffMins} mnt`);
+            
+            return str.length > 0 ? str.join(' ') : "Baru saja";
+        }
+
+        // --- SISTEM DATABASE ---
+        async function loadTable() {
+            try {
+                const res = await fetch('api_pelacakan_dian.php?action=load');
+                rawData = await res.json();
+                renderTable(rawData);
+            } catch (e) { console.error(e); }
+        }
+
+        function renderTable(dataArray) {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+
+            if (dataArray.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 40px;">Belum ada data register.</td></tr>';
+                return;
+            }
+
+            dataArray.forEach(item => {
+                const tglMasuk = item.tgl_masuk ? new Date(item.tgl_masuk).toLocaleDateString('id-ID') : '-';
+                const tglTtd = item.tgl_ttd ? new Date(item.tgl_ttd).toLocaleDateString('id-ID') : 'Belum Dijadwalkan';
+                
+                // Pewarnaan Status
+                let statusColor = "#94a3b8"; 
+                let statusTextLower = item.status.toLowerCase();
+                if(statusTextLower.includes('selesai')) statusColor = "#10b981"; 
+                else if(statusTextLower.includes('bpn')) statusColor = "#8b5cf6"; 
+                else if(statusTextLower.includes('pajak')) statusColor = "#f59e0b"; 
+                else if(statusTextLower.includes('ttd') || statusTextLower.includes('tanda tangan')) statusColor = "#3b82f6"; 
+                else if(statusTextLower.includes('pending') || statusTextLower.includes('kurang')) statusColor = "#e11d48"; 
+
+                // Parsing Data JSON Pihak
+                let klienHtml = "";
+                try {
+                    let kArr = JSON.parse(item.klien);
+                    if(Array.isArray(kArr)) {
+                        kArr.forEach((k, i) => {
+                            let docs = [];
+                            if(k.ktp) docs.push('KTP'); if(k.kk) docs.push('KK');
+                            if(k.nikah) docs.push('Nikah'); if(k.lahir) docs.push('Lahir'); if(k.kematian) docs.push('Kematian');
+                            
+                            let docBadge = docs.length > 0 ? `<div style="font-size:10px; color:#059669; font-weight:bold; background:#ecfdf5; padding:2px 5px; border-radius:4px; display:inline-block;">✓ ${docs.join(', ')}</div>` : `<span style="font-size:10px; color:#e11d48;">(Syarat Belum Lengkap)</span>`;
+                            
+                            klienHtml += `<div class="td-klien">${i+1}. ${k.nama || '-'} <br>${docBadge}</div>`;
+                        });
+                    } else klienHtml = item.klien; // Legacy string
+                } catch(e) { klienHtml = item.klien; } // Jika data lama masih berupa string
+
+                // Parsing Data JSON Objek
+                let objekHtml = "";
+                try {
+                    let oArr = JSON.parse(item.objek);
+                    if(Array.isArray(oArr)) {
+                        oArr.forEach((o, i) => {
+                            objekHtml += `
+                                <div class="td-objek">
+                                    <i class="fa-solid fa-certificate" style="margin-top:3px; color:#cbd5e1;"></i>
+                                    <div>
+                                        <b>${o.hak || '-'}</b> (L: ${o.luas || '0'} m2)<br>
+                                        <span style="color:#94a3b8;">A/N: ${o.nama || '-'} | PBB: ${o.pbb || '-'}</span><br>
+                                        <i class="fa-solid fa-location-dot"></i> ${o.alamat || '-'}
+                                    </div>
+                                </div>
+                            `;
+                        });
+                    } else objekHtml = item.objek; 
+                } catch(e) { objekHtml = item.objek; }
+
+                // SLA Waktu
+                let arrRiwayat = [];
+                try { arrRiwayat = item.riwayat_status ? JSON.parse(item.riwayat_status) : []; } catch(e){}
+                let waktuMengendapHtml = "";
+                if (arrRiwayat.length > 0) {
+                    const statusTerakhir = arrRiwayat[arrRiwayat.length - 1];
+                    const durasiMengendap = hitungDurasi(statusTerakhir.waktu, new Date().toISOString());
+                    if(statusTextLower.includes('selesai')) waktuMengendapHtml = `<div class="time-tracker time-success"><i class="fa-solid fa-check-double"></i> Tuntas</div>`;
+                    else waktuMengendapHtml = `<div class="time-tracker"><i class="fa-solid fa-hourglass-half"></i> Tertahan: ${durasiMengendap}</div>`;
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <div style="font-weight:700; font-size:12px; margin-bottom:5px; color:#64748b;">${item.no_berkas || '-'}</div>
+                        <span class="badge-layanan">${item.jenis_proses || 'Layanan Umum'}</span>
+                    </td>
+                    <td>${klienHtml}</td>
+                    <td>${objekHtml}</td>
+                    <td>
+                        <div class="status-box" style="border-left-color: ${statusColor};">${item.status || '-'}</div>
+                        ${waktuMengendapHtml}
+                        ${item.catatan ? `<div class="catatan-box">${item.catatan}</div>` : ''}
+                    </td>
+                    <td style="text-align: center; vertical-align: middle;">
+                        <button class="btn-update" onclick="editBerkas(${item.id})"><i class="fa-solid fa-folder-open"></i> Buka File</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterTable() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const filteredData = rawData.filter(item => {
+                const combinedString = `${item.klien} ${item.objek} ${item.no_berkas} ${item.status} ${item.jenis_proses}`.toLowerCase();
+                return combinedString.includes(query);
+            });
+            renderTable(filteredData);
+        }
+
+        function bukaModal() {
+            document.getElementById('modal-title').innerHTML = "<i class='fa-solid fa-folder-plus' style='color:#2563eb;'></i> Registrasi Berkas Baru";
+            document.getElementById('in-id').value = "";
+            document.getElementById('in-no').value = "";
+            document.getElementById('in-jenis').value = "";
+            document.getElementById('in-tgl-masuk').value = new Date().toISOString().split('T')[0];
+            document.getElementById('in-tgl-ttd').value = "";
+            document.getElementById('in-status').value = "Berkas Masuk & Pendaftaran";
+            document.getElementById('in-catatan').value = "";
+            
+            document.getElementById('klien-container').innerHTML = "";
+            document.getElementById('objek-container').innerHTML = "";
+            addKlien(); addObjek(); // Pancing 1 kotak kosong default
+            
+            document.getElementById('box-riwayat').style.display = "none"; 
+            document.getElementById('btn-hapus').style.display = "none";
+            document.getElementById('modal-form').style.display = "flex";
+        }
+
+        // --- FITUR TERBARU: PESSIMISTIC LOCKING SINKRONISASI SERVER ---
+        async function editBerkas(id) {
+            const item = rawData.find(x => x.id == id);
+            if(!item) return;
+
+            // 1. LAKUKAN PENGECEKAN GEMBOK KE SERVER SEBELUM MEMBUKA MODAL
+            try {
+                const response = await fetch('api_pelacakan_dian.php?action=check_lock', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, client_id: clientId })
+                });
+                const lockStatus = await response.json();
+
+                if (lockStatus.status === 'locked') {
+                    alert("🔒 " + lockStatus.pesan);
+                    return; // Hentikan eksekusi, modal dilarang dibuka
+                }
+            } catch (e) {
+                alert("Gagal memverifikasi status kunci dari server.");
+                return;
+            }
+
+            // 2. JIKA AMAN DARI SERVER, LANJUTKAN RENDER MODAL SEPERTI BIASA
+            document.getElementById('modal-title').innerHTML = "<i class='fa-solid fa-folder-open' style='color:#3b82f6;'></i> Berkas Pemeriksaan";
+            document.getElementById('in-id').value = item.id;
+            document.getElementById('in-no').value = item.no_berkas;
+            document.getElementById('in-jenis').value = item.jenis_proses;
+            document.getElementById('in-tgl-masuk').value = item.tgl_masuk;
+            document.getElementById('in-tgl-ttd').value = item.tgl_ttd;
+            document.getElementById('in-status').value = item.status;
+            document.getElementById('in-catatan').value = item.catatan;
+            
+            // Render Dynamic Klien dari JSON
+            const containerKlien = document.getElementById('klien-container');
+            containerKlien.innerHTML = "";
+            try {
+                let kArr = JSON.parse(item.klien);
+                if(Array.isArray(kArr)) kArr.forEach(k => addKlien(k));
+                else addKlien({nama: item.klien});
+            } catch(e) { addKlien({nama: item.klien}); }
+
+            // Render Dynamic Objek dari JSON
+            const containerObjek = document.getElementById('objek-container');
+            containerObjek.innerHTML = "";
+            try {
+                let oArr = JSON.parse(item.objek);
+                if(Array.isArray(oArr)) oArr.forEach(o => addObjek(o));
+                else addObjek({hak: item.objek});
+            } catch(e) { addObjek({hak: item.objek}); }
+
+            // SLA Timeline Rendering
+            document.getElementById('box-riwayat').style.display = "block";
+            const tlContainer = document.getElementById('timeline-container');
+            tlContainer.innerHTML = '';
+
+            let arrRiwayat = [];
+            try { arrRiwayat = item.riwayat_status ? JSON.parse(item.riwayat_status) : []; } catch(e){}
+
+            if (arrRiwayat.length > 0) {
+                arrRiwayat.forEach((r, index) => {
+                    let durasiTeks = "";
+                    if (index < arrRiwayat.length - 1) {
+                        const durasi = hitungDurasi(r.waktu, arrRiwayat[index + 1].waktu);
+                        durasiTeks = `<div class="tl-durasi"><i class="fa-solid fa-arrows-turn-right"></i> Berpindah setelah: ${durasi}</div>`;
+                    } else if(!r.status.toLowerCase().includes('selesai')) {
+                        const mengendap = hitungDurasi(r.waktu, new Date().toISOString());
+                        durasiTeks = `<div class="tl-durasi" style="background:#fecdd3; color:#e11d48;"><i class="fa-solid fa-hourglass-half"></i> Tertahan: ${mengendap}</div>`;
+                    }
+                    const formatWaktu = new Date(r.waktu).toLocaleString('id-ID', {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit'});
+                    tlContainer.innerHTML += `<div class="tl-item ${index === 0 ? 'first' : ''}"><div class="tl-status">${r.status}</div><div class="tl-waktu">${formatWaktu}</div>${durasiTeks}</div>`;
+                });
+            }
+
+            document.getElementById('btn-hapus').style.display = "block";
+            document.getElementById('modal-form').style.display = "flex";
+        }
+
+        // --- FITUR TERBARU: PELEPASAN GEMBOK ---
+        async function tutupModal() { 
+            const id_berkas = document.getElementById('in-id').value;
+            
+            // Jika modal yang ditutup adalah modal edit (memiliki ID), lepaskan gembok di server
+            if (id_berkas) {
+                try {
+                    await fetch('api_pelacakan_dian.php?action=release_lock', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: id_berkas, client_id: clientId })
+                    });
+                } catch(e) {
+                    console.error("Gagal melepas gembok di server.", e);
+                }
+            }
+            
+            document.getElementById('modal-form').style.display = "none"; 
+        }
+
+        async function simpanBerkas() {
+            const btn = document.querySelector('.btn-save');
+            btn.innerText = "Menyimpan...";
+            
+            // Parsing Input Dinamis Klien
+            let arrKlien = [];
+            document.querySelectorAll('#klien-container .dynamic-box').forEach(box => {
+                arrKlien.push({
+                    nama: box.querySelector('.k-nama').value,
+                    ktp: box.querySelector('.k-ktp').checked,
+                    kk: box.querySelector('.k-kk').checked,
+                    nikah: box.querySelector('.k-nikah').checked,
+                    lahir: box.querySelector('.k-lahir').checked,
+                    kematian: box.querySelector('.k-kematian').checked,
+                });
+            });
+
+            // Parsing Input Dinamis Objek
+            let arrObjek = [];
+            document.querySelectorAll('#objek-container .dynamic-box').forEach(box => {
+                arrObjek.push({
+                    hak: box.querySelector('.o-hak').value,
+                    nama: box.querySelector('.o-nama').value,
+                    pbb: box.querySelector('.o-pbb').value,
+                    luas: box.querySelector('.o-luas').value,
+                    alamat: box.querySelector('.o-alamat').value,
+                });
+            });
+
+            const id_berkas = document.getElementById('in-id').value;
+            const inputStatus = document.getElementById('in-status').value;
+            const nowISO = new Date().toISOString();
+
+            let riwayatArr = [];
+            if (id_berkas) {
+                const itemLama = rawData.find(x => x.id == id_berkas);
+                try { riwayatArr = itemLama.riwayat_status ? JSON.parse(itemLama.riwayat_status) : []; } catch(e){}
+                let lastStatus = riwayatArr.length > 0 ? riwayatArr[riwayatArr.length - 1].status : itemLama.status;
+                if (inputStatus !== lastStatus) riwayatArr.push({ status: inputStatus, waktu: nowISO });
+            } else {
+                riwayatArr.push({ status: inputStatus, waktu: nowISO });
+            }
+
+            const data = {
+                id: id_berkas,
+                no_berkas: document.getElementById('in-no').value,
+                jenis_proses: document.getElementById('in-jenis').value,
+                klien: JSON.stringify(arrKlien), // Diubah jadi JSON Array Raksasa
+                objek: JSON.stringify(arrObjek), // Diubah jadi JSON Array Raksasa
+                tgl_masuk: document.getElementById('in-tgl-masuk').value,
+                tgl_ttd: document.getElementById('in-tgl-ttd').value,
+                status: inputStatus,
+                catatan: document.getElementById('in-catatan').value,
+                riwayat_status: JSON.stringify(riwayatArr) 
+            };
+
+            try {
+                await fetch('api_pelacakan_dian.php?action=save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                // --- KODE PELAPOR KE MASTER BRANKAS (TAMBAHKAN INI) ---
+                if (window.parent && window.parent.saveToMasterDB) {
+                    let namaRepresentatif = arrKlien.length > 0 ? arrKlien[0].nama : "Klien / Pihak";
+                    window.parent.saveToMasterDB('PELACAKAN', document.getElementById('in-no').value || 'Tanpa Ref', namaRepresentatif);
+                }
+                // ------------------------------------------------------
+
+                tutupModal(); 
+                loadTable();
+            } catch(e) { alert("Gagal terhubung ke MySQL Server Utama!"); }
+            
+            btn.innerHTML = "<i class='fa-solid fa-floppy-disk'></i> Simpan Update";
+        }
+
+        async function hapusBerkas() {
+            if(!confirm("Yakin hapus arsip ini?")) return;
+            const id = document.getElementById('in-id').value;
+            await fetch(`api_pelacakan_dian.php?action=delete&id=${id}`);
+            
+            // Tetap panggil rilis gembok hanya untuk keamanan
+            try {
+                await fetch('api_pelacakan_dian.php?action=release_lock', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, client_id: clientId })
+                });
+            } catch(e) {}
+            
+            document.getElementById('modal-form').style.display = "none"; 
+            loadTable();
+        }
+
+        window.onload = loadTable;
+    </script>
+</body>
+</html>

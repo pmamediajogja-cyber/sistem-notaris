@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto-Batch GPS Map Camera (Online Pro)</title>
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/gh/google/open-location-code@1.0.4/js/src/openlocationcode.min.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f1f5f9; margin: 0; padding: 30px; display: flex; flex-direction: column; align-items: center; }
+        
+        .container { background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); max-width: 800px; width: 100%; margin-bottom: 30px;}
+        h2 { margin-top: 0; color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 15px;}
+        
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;}
+        .full-width { grid-column: span 2; }
+        
+        label { display: block; font-size: 12px; font-weight: bold; color: #475569; margin-bottom: 5px; text-transform: uppercase;}
+        input[type="text"], input[type="number"], input[type="datetime-local"], textarea { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-family: inherit; font-size: 14px; background-color: #f8fafc;}
+        input:focus, textarea:focus { outline: none; border-color: #3b82f6; background-color: #fff;}
+        
+        .btn { background: #3b82f6; color: white; border: none; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 15px; width: 100%; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 10px;}
+        .btn:hover { background: #2563eb; }
+        .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+
+        .status-box { background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; padding: 15px; border-radius: 6px; font-size: 13px; font-weight: bold; margin-bottom: 20px; display: none;}
+        .warning-box { background: #fffbeb; border: 1px dashed #f59e0b; padding: 15px; border-radius: 6px; }
+
+        /* Hasil Render Card */
+        #results { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; width: 100%; max-width: 1200px;}
+        .result-card { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; position: relative;}
+        .result-card img { width: 100%; border-radius: 4px; margin-bottom: 10px;}
+        .download-overlay { position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.7); color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; text-decoration: none;}
+        .download-overlay:hover { background: #10b981; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2><i class="fa-solid fa-satellite" style="color: #3b82f6;"></i> Mesin Batch GPS Camera (Online Version)</h2>
+    <p style="font-size: 13px; color: #64748b;">Aplikasi akan menarik alamat secara <i>online</i> dari satelit. Jika internet terputus di tengah jalan, sistem akan otomatis menggunakan alamat cadangan tanpa menghentikan proses cetak.</p>
+
+    <div class="status-box" id="status-box"><i class="fa-solid fa-spinner fa-spin"></i> <span id="status-text">Menyiapkan mesin...</span></div>
+
+    <div class="form-grid">
+        <div class="full-width">
+            <label>1. Koordinat Awal (Lat, Lon)</label>
+            <input type="text" id="in-koordinat" placeholder="Contoh: -7.774862, 110.396823">
+        </div>
+
+        <div>
+            <label>2. Total Output Patok</label>
+            <input type="number" id="in-jumlah" min="1" placeholder="Contoh: 50">
+        </div>
+        
+        <div>
+            <label>3. Waktu Patok Diambil</label>
+            <input type="datetime-local" id="in-time">
+        </div>
+
+        <div class="full-width warning-box">
+            <label style="color: #b45309;"><i class="fa-solid fa-shield-halved"></i> Alamat Cadangan (Jika Satelit Gagal)</label>
+            <textarea id="in-address-fallback" rows="2" style="margin-top: 5px; border-color: #fde68a;" placeholder="Contoh: Jl. Perumahan, Desa Condongcatur, Kecamatan Depok, Kabupaten Sleman, Daerah Istimewa Yogyakarta, Indonesia"></textarea>
+        </div>
+    </div>
+
+    <button class="btn" id="btn-proses" onclick="jalankanBatchEngine()">🚀 Mulai Penarikan Satelit & Render Patok</button>
+    
+    <button class="btn" id="btn-download-pdf" onclick="downloadAllPDF()" style="background: #059669; margin-top: 15px; display: none;">
+        <i class="fa-solid fa-file-pdf"></i> 📥 Download Semua PDF (Laporan BPN)
+    </button>
+</div>
+
+<div id="results"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+    // Fitur autofill waktu dinonaktifkan agar kolom kosong sesuai permintaan
+    /*
+    window.onload = () => {
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        document.getElementById('in-time').value = now.toISOString().slice(0,16);
+    };
+    */
+
+    // Mesin Haversine: Menghitung koordinat baru bergeser jarak (dalam meter)
+    function hitungTitikBaru(lat, lon, distance, bearing) {
+        const R = 6378137; // Radius bumi dalam meter
+        const brng = bearing * Math.PI / 180;
+        const lat1 = lat * Math.PI / 180;
+        const lon1 = lon * Math.PI / 180;
+        const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distance/R) + Math.cos(lat1) * Math.sin(distance/R) * Math.cos(brng));
+        const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(distance/R) * Math.cos(lat1), Math.cos(distance/R) - Math.sin(lat1) * Math.sin(lat2));
+        return { lat: lat2 * 180 / Math.PI, lon: lon2 * 180 / Math.PI };
+    }
+
+    // Format Tanggal ala Aplikasi GPS
+    function formatTanggalGPS(dateObj) {
+        const dd = String(dateObj.getDate()).padStart(2, '0');
+        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const yy = String(dateObj.getFullYear()).slice(-2);
+        let hrs = dateObj.getHours();
+        const ampm = hrs >= 12 ? 'PM' : 'AM';
+        hrs = hrs % 12; hrs = hrs ? hrs : 12; 
+        const h = String(hrs).padStart(2, '0');
+        const min = String(dateObj.getMinutes()).padStart(2, '0');
+        return `${yy}/${mm}/${dd} ${h}:${min} ${ampm}`;
+    }
+
+    // Pembuat Teks Multi-baris pada Canvas
+    function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+        const words = text.split(' ');
+        let line = ''; let currentY = y;
+        for(let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > maxWidth && n > 0) {
+                ctx.fillText(line, x, currentY);
+                line = words[n] + ' '; currentY += lineHeight;
+            } else { line = testLine; }
+        }
+        ctx.fillText(line, x, currentY);
+        return currentY + lineHeight; // Mengembalikan kursor Y terbaru
+    }
+
+    // ==========================================
+    // MESIN UTAMA: ONLINE FETCH & CANVAS RENDER
+    // ==========================================
+    async function jalankanBatchEngine() {
+        const inputStrVal = document.getElementById('in-koordinat').value;
+        if (!inputStrVal) return alert("Silakan isi Koordinat Awal terlebih dahulu!");
+
+        const inputStr = inputStrVal.replace(/[^0-9.,-]/g, '');
+        const parts = inputStr.split(',');
+        if (parts.length < 2) return alert("Format Koordinat salah! Gunakan koma untuk pemisah Lat dan Lon.");
+        
+        let currentLat = parseFloat(parts[0]);
+        let currentLon = parseFloat(parts[1]);
+        
+        const inputJumlah = document.getElementById('in-jumlah').value;
+        const jmlFoto = inputJumlah ? parseInt(inputJumlah) : 50; // default 50 jika kosong
+
+        const inputWaktu = document.getElementById('in-time').value;
+        let currentTime = inputWaktu ? new Date(inputWaktu) : new Date(); // default sekarang jika kosong
+
+        const fallbackAddress = document.getElementById('in-address-fallback').value || "Lokasi Cadangan Tidak Diisi";
+
+        const btn = document.getElementById('btn-proses');
+        const statusBox = document.getElementById('status-box');
+        const statusText = document.getElementById('status-text');
+        const resultsDiv = document.getElementById('results');
+        
+        btn.disabled = true;
+        statusBox.style.display = 'block';
+        statusBox.style.background = '#eff6ff';
+        statusBox.style.color = '#1d4ed8';
+        resultsDiv.innerHTML = '';
+
+        let titleText = "Lokasi Tidak Diketahui, Indonesia";
+        let addressText = fallbackAddress; 
+
+        try {
+            // TAHAP 1: REQUEST ONLINE KE SATELIT
+            statusText.innerHTML = "Menghubungi satelit lokasi secara online...";
+            
+            try {
+                const apiUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentLat}&lon=${currentLon}&addressdetails=1&email=kantor.notaris@gmail.com`;
+                const geoRes = await fetch(apiUrl, { headers: { 'Accept-Language': 'id-ID' } });
+                
+                if (geoRes.ok) {
+                    const geoData = await geoRes.json();
+                    if(geoData && geoData.address) {
+                        const adr = geoData.address;
+                        const desa = adr.village || adr.neighbourhood || adr.hamlet || "";
+                        const jalan = adr.road || adr.pedestrian || adr.path || "";
+                        const kecamatanAsli = adr.city_district || adr.suburb || "";
+                        const kabupatenAsli = adr.city || adr.county || "";
+                        const provinsi = adr.state || "";
+                        const kodepos = adr.postcode || "";
+
+                        // Merakit Judul Cetak Tebal
+                        let titleParts = [];
+                        if (kecamatanAsli) titleParts.push(kecamatanAsli.startsWith('Kec') ? kecamatanAsli : 'Kecamatan ' + kecamatanAsli);
+                        if (provinsi) titleParts.push(provinsi);
+                        titleParts.push("Indonesia");
+                        titleText = titleParts.join(", ");
+
+                        // Merakit Alamat Detail
+                        let addrArray = [];
+                        if (jalan) addrArray.push(jalan);
+                        if (desa) addrArray.push(desa);
+                        if (kecamatanAsli) addrArray.push(kecamatanAsli.startsWith('Kec') ? kecamatanAsli : 'Kec. ' + kecamatanAsli);
+                        if (kabupatenAsli) addrArray.push(kabupatenAsli.startsWith('Kab') ? kabupatenAsli : 'Kabupaten ' + kabupatenAsli);
+                        if (provinsi) addrArray.push(kodepos ? `${provinsi} ${kodepos}` : provinsi);
+                        addrArray.push("Indonesia");
+                        
+                        addressText = addrArray.join(", ");
+                    }
+                }
+            } catch (osmError) {
+                console.warn("Koneksi satelit gagal. Sistem mengaktifkan alamat cadangan.");
+            }
+
+            // TAHAP 2: BATCH PROCESSING KANVAS GAMBAR
+            for (let i = 1; i <= jmlFoto; i++) {
+                statusText.innerText = `Merender foto patok ke-${i} dari ${jmlFoto}...`;
+
+                const img = new Image();
+                let isImageLoaded = false;
+                
+                // SISTEM FOTO ACAK (RANDOM SELECTION)
+                // Mengambil foto secara acak dari 1.jpg sampai 39.jpg
+                const totalFotoPatok = 39;
+                const randomIndex = Math.floor(Math.random() * totalFotoPatok) + 1;
+                img.src = `foto_patok/${randomIndex}.jpg`;
+                
+                try {
+                    await new Promise((resolve, reject) => { 
+                        img.onload = resolve; 
+                        img.onerror = () => reject(new Error("Gambar tidak ditemukan")); 
+                    });
+                    isImageLoaded = true;
+                } catch (e) {
+                    // Jika gagal, coba lagi dengan foto lain secara acak
+                    let percobaan = 0;
+                    while (!isImageLoaded && percobaan < 5) {
+                        const fallbackIndex = Math.floor(Math.random() * totalFotoPatok) + 1;
+                        img.src = `foto_patok/${fallbackIndex}.jpg`;
+                        try {
+                            await new Promise((resolve, reject) => { 
+                                img.onload = resolve; 
+                                img.onerror = () => reject(new Error("Gambar tidak ditemukan")); 
+                            });
+                            isImageLoaded = true;
+                        } catch (err) {
+                            percobaan++;
+                        }
+                    }
+                }
+
+                if(!isImageLoaded) {
+                    alert("Folder /foto_patok/ kosong! Tolong masukkan minimal file 1.jpg ke dalam folder tersebut.");
+                    break;
+                }
+
+                // ==========================================
+                // JARING PENGAMAN: PLUS CODE LIBRARY BYPASS
+                // ==========================================
+                let finalAddressText = addressText;
+                try {
+                    if (typeof OpenLocationCode !== 'undefined') {
+                        const fullPlusCode = OpenLocationCode.encode(currentLat, currentLon, 10);
+                        const shortPlusCode = fullPlusCode.substring(4); // Cth: 69FW+RQX
+                        finalAddressText = `${shortPlusCode}, ${addressText}`;
+                    } else {
+                        console.warn("Library Plus Code gagal diunduh browser. Melanjutkan tanpa Plus Code.");
+                    }
+                } catch(err) {
+                    console.warn("Gagal men-generate Plus Code", err);
+                }
+
+                // Render Canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+
+                // Efek Kamera Acak (Zoom & Geser)
+                const zoomFactor = 1.0 + (Math.random() * 0.15);
+                const newImgWidth = img.width * zoomFactor;
+                const newImgHeight = img.height * zoomFactor;
+                const offsetX = - (Math.random() * (newImgWidth - canvas.width));
+                const offsetY = - (Math.random() * (newImgHeight - canvas.height));
+
+                ctx.drawImage(img, offsetX, offsetY, newImgWidth, newImgHeight);
+
+                const scale = canvas.width / 1080;
+
+                // Gradasi Gelap Bawah
+                const gradHeight = 350 * scale;
+                const grad = ctx.createLinearGradient(0, canvas.height - gradHeight, 0, canvas.height);
+                grad.addColorStop(0, 'rgba(0,0,0,0)');
+                grad.addColorStop(0.3, 'rgba(0,0,0,0.6)');
+                grad.addColorStop(1, 'rgba(0,0,0,0.9)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, canvas.height - gradHeight, canvas.width, gradHeight);
+
+                // ==========================================
+                // KONFIGURASI TULISAN (TOP-DOWN CASCADE)
+                // ==========================================
+                const marginX = 40 * scale;
+                const maxWidth = canvas.width - (80 * scale);
+                ctx.shadowColor = "rgba(0,0,0,0.8)";
+                ctx.shadowBlur = 4 * scale;
+                ctx.shadowOffsetX = 2 * scale;
+                ctx.shadowOffsetY = 2 * scale;
+                ctx.fillStyle = "white";
+
+                // 1. Tentukan titik mula (Anchor) dari atas ke bawah
+                let cursorY = canvas.height - (260 * scale); 
+
+                // 2. Gambar Ikon Stempel GPS Map Camera
+                const boxWidth = 160 * scale;
+                const boxHeight = 40 * scale;
+                const boxX = canvas.width - boxWidth - marginX;
+                const boxY = cursorY - (50 * scale);
+
+                ctx.shadowColor = "transparent";
+                ctx.fillStyle = "rgba(0,0,0,0.6)";
+                ctx.beginPath();
+                ctx.roundRect ? ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 8 * scale) : ctx.rect(boxX, boxY, boxWidth, boxHeight);
+                ctx.fill();
+
+                ctx.fillStyle = "#38bdf8"; 
+                ctx.fillRect(boxX + (10*scale), boxY + (10*scale), 20*scale, 20*scale);
+                ctx.fillStyle = "#facc15"; 
+                ctx.beginPath();
+                ctx.arc(boxX + (20*scale), boxY + (20*scale), 4*scale, 0, 2 * Math.PI);
+                ctx.fill();
+
+                ctx.fillStyle = "white";
+                ctx.font = `bold ${11 * scale}px Arial`;
+                ctx.fillText("GPS Map Camera", boxX + (40 * scale), boxY + (24 * scale));
+
+                // Kembalikan efek bayangan untuk teks utama
+                ctx.shadowColor = "rgba(0,0,0,0.8)";
+
+                // 3. Tulis Teks secara Dinamis (Mendorong Y ke bawah proporsional)
+                ctx.font = `bold ${32 * scale}px Arial`;
+                cursorY = wrapText(ctx, titleText, marginX, cursorY, maxWidth, 40 * scale);
+                
+                cursorY += (5 * scale); // Jarak ekstra antara judul dan alamat
+                ctx.font = `bold ${24 * scale}px Arial`; 
+                cursorY = wrapText(ctx, finalAddressText, marginX, cursorY, maxWidth, 35 * scale);
+                
+                cursorY += (15 * scale); // Jarak ekstra sebelum kordinat angka
+                ctx.font = `bold ${24 * scale}px Arial`;
+                ctx.fillText(`Lat ${currentLat.toFixed(6)}°`, marginX, cursorY);
+                
+                cursorY += (35 * scale); // Jarak antar baris kordinat
+                ctx.fillText(`Long ${currentLon.toFixed(6)}°`, marginX, cursorY);
+                
+                cursorY += (35 * scale);
+                ctx.fillText(formatTanggalGPS(currentTime), marginX, cursorY);
+
+                // ==========================================
+
+                // Ekspor Data Gambar ke Layar UI
+                const finalImageURL = canvas.toDataURL("image/jpeg", 0.95);
+                const card = document.createElement('div');
+                card.className = 'result-card';
+                card.innerHTML = `
+                    <a href="${finalImageURL}" download="Patok_${i}.jpg" class="download-overlay" title="Download Foto"><i class="fa-solid fa-download"></i></a>
+                    <img src="${finalImageURL}">
+                    <div style="font-size: 11px; font-weight: bold; color: #475569;">Patok ${i}</div>
+                    <div style="font-size: 10px; color: #94a3b8;">${currentLat.toFixed(6)}, ${currentLon.toFixed(6)}</div>
+                `;
+                resultsDiv.appendChild(card);
+
+                // ITERASI MATEMATIS UNTUK PATOK BERIKUTNYA (ARAH ACAK)
+                const arahAcak = Math.random() * 360; // Menghasilkan arah acak 0-360 derajat
+                const jarakPergeseran = 10; // Jarak patok 10 meter
+                
+                const nextCoord = hitungTitikBaru(currentLat, currentLon, jarakPergeseran, arahAcak); 
+                currentLat = nextCoord.lat;
+                currentLon = nextCoord.lon;
+                
+                // Penambahan menit acak (1-3 menit) per foto
+                currentTime.setMinutes(currentTime.getMinutes() + Math.floor(Math.random() * 3) + 1); 
+            }
+
+            statusBox.style.background = '#ecfdf5';
+            statusBox.style.borderColor = '#a7f3d0';
+            statusBox.style.color = '#059669';
+            statusText.innerHTML = "<b>Sukses!</b> Seluruh foto patok berhasil dirakit.";
+
+            // Tampilkan tombol Download PDF
+            document.getElementById('btn-download-pdf').style.display = 'flex';
+
+        } catch (error) {
+            console.error(error);
+            alert("Terjadi kesalahan sistem internal. Pastikan foto 1.jpg tersedia di folder.");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // ==========================================
+    // FITUR DOWNLOAD SEMUA PDF (LAPORAN BPN)
+    // ==========================================
+    async function downloadAllPDF() {
+        const resultsDiv = document.getElementById('results');
+        const cards = resultsDiv.querySelectorAll('.result-card img');
+        
+        if (cards.length === 0) {
+            alert('Belum ada foto yang dirender! Klik tombol "Mulai" terlebih dahulu.');
+            return;
+        }
+
+        const statusText = document.getElementById('status-text');
+        const btnPdf = document.getElementById('btn-download-pdf');
+        
+        btnPdf.disabled = true;
+        statusText.innerText = "Membuat PDF...";
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = 210;
+        const margin = 15;
+        const colGap = 10; 
+        const rowGap = 20; 
+        const boxWidth = (pageWidth - (margin * 2) - colGap) / 2;
+        const boxHeight = 115;
+        const startY = 30;
+
+        const imageSources = Array.from(cards).map(img => img.src);
+
+        for (let i = 0; i < imageSources.length; i++) {
+            if (i % 4 === 0) {
+                if (i !== 0) pdf.addPage();
+                pdf.setFont("helvetica", "bold");
+                pdf.setFontSize(16);
+                pdf.text("DOKUMENTASI FOTO PATOK", pageWidth / 2, 20, { align: "center" });
+            }
+
+            const gridIndex = i % 4; 
+            const col = gridIndex % 2; 
+            const row = Math.floor(gridIndex / 2); 
+
+            const frameX = margin + (col * (boxWidth + colGap));
+            const frameY = startY + (row * (boxHeight + rowGap));
+
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(12);
+            pdf.text(`Foto Patok ${i + 1}`, frameX, frameY);
+
+            const img = new Image();
+            img.src = imageSources[i];
+            
+            const imgData = await new Promise((resolve) => {
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    resolve({
+                        base64: canvas.toDataURL('image/jpeg', 0.8),
+                        width: img.width,
+                        height: img.height
+                    });
+                };
+            });
+
+            const scaleRatio = Math.min(boxWidth / imgData.width, boxHeight / imgData.height);
+            const finalImgWidth = imgData.width * scaleRatio;
+            const finalImgHeight = imgData.height * scaleRatio;
+
+            const offsetX = frameX + ((boxWidth - finalImgWidth) / 2);
+            const offsetY = frameY + 5 + ((boxHeight - finalImgHeight) / 2);
+
+            pdf.addImage(imgData.base64, 'JPEG', offsetX, offsetY, finalImgWidth, finalImgHeight);
+        }
+
+        pdf.save('Laporan_Patok_BPN.pdf');
+        statusText.innerText = "PDF berhasil diunduh!";
+        btnPdf.disabled = false;
+    }
+</script>
+
+</body>
+</html>

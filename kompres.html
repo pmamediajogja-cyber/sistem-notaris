@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lokal PDF Compressor (Target Size)</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 40px; display: flex; flex-direction: column; align-items: center; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; max-width: 500px; width: 100%; }
+        h2 { color: #2c3e50; margin-top: 0; }
+        .info-box { background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 5px; font-size: 13px; text-align: left; margin-bottom: 20px; border-left: 4px solid #ffeeba; }
+        input[type="file"], input[type="number"] { margin: 10px 0 20px; display: block; width: 100%; padding: 15px; border-radius: 6px; border: 2px dashed #bdc3c7; box-sizing: border-box; font-size: 16px;}
+        input[type="number"] { border: 1px solid #ccc; background: #fdfdfd; }
+        button { background-color: #27ae60; color: white; border: none; padding: 15px 24px; font-size: 16px; border-radius: 5px; cursor: pointer; width: 100%; font-weight: bold; transition: 0.3s; }
+        button:hover { background-color: #2ecc71; }
+        button:disabled { background-color: #95a5a6; cursor: not-allowed; }
+        #status { margin-top: 15px; font-size: 14px; color: #2980b9; font-weight: bold; white-space: pre-line; line-height: 1.5; }
+        
+        /* Loading Spinner */
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #2980b9; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 10px; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🗜️ PDF Target Compressor</h2>
+    
+    <div class="info-box">
+        <strong>⚙️ Mekanisme Teknis:</strong> Aplikasi merasterisasi dokumen (merubah halaman menjadi gambar) untuk menurunkan resolusi secara presisi. Teks tidak akan bisa di-copy setelah dikompresi.
+    </div>
+    
+    <div style="text-align: left; font-weight: bold; color: #34495e;">1. Pilih File PDF Asli:</div>
+    <input type="file" id="pdfInput" accept="application/pdf">
+    
+    <div style="text-align: left; font-weight: bold; color: #34495e;">2. Target Ukuran Maksimal (Kilobyte / KB):</div>
+    <input type="number" id="targetKB" placeholder="Contoh: 500 (untuk target 500 KB)" min="50">
+    
+    <button id="compressBtn" onclick="processPDF()">
+        <span class="loader" id="loader"></span> Mulai Kompresi
+    </button>
+    <div id="status"></div>
+</div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+    // Beri waktu browser untuk merender UI agar tidak freeze
+    const delay = ms => new Promise(res => setTimeout(res, ms));
+
+    async function processPDF() {
+        const fileInput = document.getElementById('pdfInput').files[0];
+        const targetKB = parseInt(document.getElementById('targetKB').value);
+        const btn = document.getElementById('compressBtn');
+        const statusEl = document.getElementById('status');
+        const loader = document.getElementById('loader');
+
+        if (!fileInput) return alert("Pilih file PDF terlebih dahulu!");
+        if (!targetKB || targetKB < 10) return alert("Masukkan target ukuran yang valid (minimal 10 KB).");
+
+        // UI Updates
+        btn.disabled = true;
+        loader.style.display = "inline-block";
+        const targetBytes = targetKB * 1024;
+        
+        try {
+            statusEl.innerText = "Membaca struktur file PDF asli...\n";
+            await delay(100); // Mencegah UI lag
+
+            // 1. Ekstraksi dan Rasterisasi Halaman PDF ke Canvas
+            const arrayBuffer = await fileInput.arrayBuffer();
+            const pdfOriginal = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+            
+            const totalPages = pdfOriginal.numPages;
+            const pageCanvases = [];
+            
+            statusEl.innerText += `Merasterisasi ${totalPages} halaman ke dalam memori...\n`;
+
+            for (let i = 1; i <= totalPages; i++) {
+                const page = await pdfOriginal.getPage(i);
+                // Kita gunakan scale 2 agar saat dikompres nanti kualitas dasar tidak terlalu hancur
+                const viewport = page.getViewport({ scale: 2.0 }); 
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d');
+                
+                // Beri warna latar putih (PDF aslinya kadang transparan)
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                
+                pageCanvases.push({
+                    canvas: canvas,
+                    width: viewport.width,
+                    height: viewport.height
+                });
+            }
+
+            // 2. ALGORITMA PENCARIAN BINER (Binary Search) UNTUK TARGET SIZE
+            statusEl.innerText += `Mencari titik kompresi optimal untuk target ~${targetKB} KB...\n`;
+            await delay(100);
+
+            let minQuality = 0.01;
+            let maxQuality = 0.95;
+            let bestBlob = null;
+            let bestDiff = Infinity;
+            
+            const { jsPDF } = window.jspdf;
+
+            // Kita lakukan 5 kali iterasi untuk mencari tebakan ukuran terdekat
+            for (let step = 0; step < 5; step++) {
+                let currentQuality = (minQuality + maxQuality) / 2;
+                
+                // Buat PDF Baru di memori
+                let tempPdf = new jsPDF('p', 'pt', 'a4');
+                
+                for (let i = 0; i < pageCanvases.length; i++) {
+                    if (i > 0) tempPdf.addPage();
+                    
+                    const pageData = pageCanvases[i];
+                    // Kalkulasi rasio agar gambar muat di A4 jsPDF (595.28 x 841.89 points)
+                    const pdfPageWidth = tempPdf.internal.pageSize.getWidth();
+                    const pdfPageHeight = tempPdf.internal.pageSize.getHeight();
+                    
+                    const ratio = Math.min(pdfPageWidth / pageData.width, pdfPageHeight / pageData.height);
+                    const finalW = pageData.width * ratio;
+                    const finalH = pageData.height * ratio;
+                    
+                    // Center alignment
+                    const x = (pdfPageWidth - finalW) / 2;
+                    const y = (pdfPageHeight - finalH) / 2;
+
+                    // Mengubah canvas menjadi JPEG dengan kualitas spesifik hasil tebakan Binary Search
+                    const imgData = pageData.canvas.toDataURL('image/jpeg', currentQuality);
+                    tempPdf.addImage(imgData, 'JPEG', x, y, finalW, finalH);
+                }
+
+                // Kalkulasi ukuran hasil
+                const blob = tempPdf.output('blob');
+                const size = blob.size;
+
+                // Evaluasi Logika Biner
+                if (size <= targetBytes && (targetBytes - size) < bestDiff) {
+                    // Jika ukurannya di bawah target dan paling mendekati target, simpan sebagai yang terbaik
+                    bestBlob = blob;
+                    bestDiff = targetBytes - size;
+                }
+
+                // Jika hasil ukuran terlalu besar, turunkan batas maksimal kualitas (perkecil ukuran)
+                if (size > targetBytes) {
+                    maxQuality = currentQuality;
+                } else {
+                    // Jika hasil ukuran terlalu kecil, naikkan batas minimal (perbesar ukuran agar gambar lebih tajam)
+                    minQuality = currentQuality;
+                }
+                
+                // Cetak Log ke layar agar Anda tahu prosesnya
+                console.log(`Step ${step+1}: Quality ${currentQuality.toFixed(2)} -> ${(size/1024).toFixed(1)} KB`);
+            }
+
+            // 3. FINISHING DAN DOWNLOAD
+            if (!bestBlob) {
+                // Jika setelah 5 kali iterasi ukurannya masih di atas target (karena target sangat kecil dan kualitas tidak bisa turun lagi)
+                statusEl.innerText += `\n⚠️ Target terlalu kecil. Memberikan hasil kompresi paling maksimal.\n`;
+                // Panggil ulang dengan kualitas terendah mutlak
+                bestBlob = compressManual(pageCanvases, 0.01);
+            }
+
+            const finalKB = (bestBlob.size / 1024).toFixed(1);
+            statusEl.innerText += `\n✅ Selesai! Ukuran akhir: ${finalKB} KB`;
+
+            // Memicu Download
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(bestBlob);
+            link.download = `Compressed_${targetKB}KB_${fileInput.name}`;
+            link.click();
+
+        } catch (error) {
+            console.error(error);
+            statusEl.innerText = "❌ Terjadi kesalahan sistem saat memproses PDF.";
+        } finally {
+            btn.disabled = false;
+            loader.style.display = "none";
+        }
+    }
+
+    // Fungsi Fallback jika ukuran tidak kunjung tercapai
+    function compressManual(pageCanvases, quality) {
+        const { jsPDF } = window.jspdf;
+        let pdf = new jsPDF('p', 'pt', 'a4');
+        for (let i = 0; i < pageCanvases.length; i++) {
+            if (i > 0) pdf.addPage();
+            const pageData = pageCanvases[i];
+            const ratio = Math.min(pdf.internal.pageSize.getWidth() / pageData.width, pdf.internal.pageSize.getHeight() / pageData.height);
+            const finalW = pageData.width * ratio;
+            const finalH = pageData.height * ratio;
+            const x = (pdf.internal.pageSize.getWidth() - finalW) / 2;
+            const y = (pdf.internal.pageSize.getHeight() - finalH) / 2;
+            const imgData = pageData.canvas.toDataURL('image/jpeg', quality);
+            pdf.addImage(imgData, 'JPEG', x, y, finalW, finalH);
+        }
+        return pdf.output('blob');
+    }
+</script>
+
+</body>
+</html>

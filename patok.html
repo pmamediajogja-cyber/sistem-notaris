@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="Expires" content="0">
+    <title>Generator Laporan Patok</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 40px; display: flex; flex-direction: column; align-items: center; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; max-width: 500px; width: 100%; }
+        h2 { color: #2c3e50; margin-top: 0; }
+        input[type="file"] { margin: 20px 0; display: block; width: 100%; border: 2px dashed #bdc3c7; padding: 20px; border-radius: 6px; box-sizing: border-box; cursor: pointer; }
+        button { background-color: #2980b9; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 5px; cursor: pointer; width: 100%; transition: 0.3s; font-weight: bold; }
+        button:hover { background-color: #3498db; }
+        button:disabled { background-color: #95a5a6; cursor: not-allowed; }
+        #status { margin-top: 15px; font-size: 14px; color: #7f8c8d; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📄 Generator Laporan Patok</h2>
+    <p style="color: #7f8c8d; font-size: 14px;">Upload foto patok. Landscape otomatis dirotasi jadi Portrait. Semua foto dijamin pas (fit) tanpa crop, 4 foto per lembar.</p>
+    
+    <input type="file" id="fileInput" accept="image/*" multiple>
+    <button id="generateBtn" onclick="generatePDF()">Render & Download PDF</button>
+    <div id="status"></div>
+</div>
+
+<script>
+    // FUNGSI INTI: Membaca gambar, merotasi jika landscape, dan mengembalikan Base64 + Dimensi
+    function processImageFitRotate(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (e) => {
+                const img = new Image();
+                img.src = e.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+
+                    // CEK ORIENTASI: Jika lebar > tinggi, berarti Landscape. Harus dirotasi 90 derajat.
+                    if (img.width > img.height) {
+                        // Tukar lebar dan tinggi kanvas untuk menampung gambar yang diberdirikan (Portrait)
+                        canvas.width = img.height;
+                        canvas.height = img.width;
+                        
+                        // Pindahkan titik pusat kanvas dan putar 90 derajat
+                        ctx.translate(canvas.width / 2, canvas.height / 2);
+                        ctx.rotate(90 * Math.PI / 180);
+                        
+                        // Gambar foto yang sudah diputar
+                        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+                    } else {
+                        // Jika sudah Portrait, biarkan apa adanya
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        ctx.drawImage(img, 0, 0);
+                    }
+
+                    // Kembalikan gambar yang sudah diproses
+                    resolve({
+                        base64: canvas.toDataURL('image/jpeg', 0.8), // Kompresi ringan agar PDF tidak terlalu berat
+                        width: canvas.width,
+                        height: canvas.height
+                    });
+                };
+            };
+            reader.onerror = error => reject(error);
+        });
+    }
+
+    async function generatePDF() {
+        const files = Array.from(document.getElementById('fileInput').files);
+        const statusEl = document.getElementById('status');
+        const btn = document.getElementById('generateBtn');
+
+        if (files.length === 0) {
+            alert('Harap pilih minimal 1 foto terlebih dahulu!');
+            return;
+        }
+
+        btn.disabled = true;
+        statusEl.innerText = `Memproses ${files.length} foto... Mohon tunggu.`;
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+
+        // PENGATURAN GRID (A4 = 210 x 297 mm)
+        const pageWidth = 210;
+        const margin = 15;
+        const colGap = 10; 
+        const rowGap = 20; 
+        
+        // Ukuran Kotak / Bounding Box maksimal untuk gambar
+        const boxWidth = (pageWidth - (margin * 2) - colGap) / 2; // Lebar kotak: 85 mm
+        const boxHeight = 115; // Tinggi maksimal kotak untuk 1 foto
+        const startY = 30; // Posisi Y pertama dimulai setelah judul
+
+        try {
+            for (let i = 0; i < files.length; i++) {
+                
+                // Tambah Halaman Baru setiap kelipatan 4
+                if (i % 4 === 0) {
+                    if (i !== 0) pdf.addPage();
+                    pdf.setFont("helvetica", "bold");
+                    pdf.setFontSize(16);
+                    pdf.text("DOKUMENTASI FOTO PATOK", pageWidth / 2, 20, { align: "center" });
+                }
+
+                // Kalkulasi Indeks Kolom dan Baris
+                const gridIndex = i % 4; 
+                const col = gridIndex % 2; 
+                const row = Math.floor(gridIndex / 2); 
+
+                // Titik awal X dan Y untuk KOTAK FRAME
+                const frameX = margin + (col * (boxWidth + colGap));
+                const frameY = startY + (row * (boxHeight + rowGap));
+
+                // 1. Tulis Teks Judul
+                pdf.setFont("helvetica", "bold");
+                pdf.setFontSize(12);
+                pdf.text(`Foto Patok ${i + 1}`, frameX, frameY);
+
+                // 2. Proses Gambar (Rotasi otomatis terjadi di sini)
+                const imgData = await processImageFitRotate(files[i]);
+
+                // 3. KALKULASI FIT (Mencegah Crop dan Gepeng)
+                // Mencari rasio terkecil agar foto mengecil secara proporsional dan masuk utuh ke dalam boxWidth x boxHeight
+                const scaleRatio = Math.min(boxWidth / imgData.width, boxHeight / imgData.height);
+                
+                const finalImgWidth = imgData.width * scaleRatio;
+                const finalImgHeight = imgData.height * scaleRatio;
+
+                // 4. Kalkulasi Offset untuk menengahkan foto di dalam kotak (Center Alignment)
+                const offsetX = frameX + ((boxWidth - finalImgWidth) / 2);
+                const offsetY = frameY + 5 + ((boxHeight - finalImgHeight) / 2); // +5 untuk memberi jarak dari Teks
+
+                // 5. Cetak gambar ke PDF
+                pdf.addImage(imgData.base64, 'JPEG', offsetX, offsetY, finalImgWidth, finalImgHeight);
+            }
+
+            pdf.save('Dokumentasi_Foto_Patok.pdf');
+            statusEl.innerText = "PDF berhasil dibuat dan diunduh! ✅";
+
+        } catch (error) {
+            console.error("Error: ", error);
+            statusEl.innerText = "Terjadi kesalahan saat memproses gambar.";
+        } finally {
+            btn.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>

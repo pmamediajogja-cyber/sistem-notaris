@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta name="Expires" content="0">
+    <title>Generator Surat Kuasa Dinamis</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        :root { --primary: #1e293b; --accent: #2563eb; --bg: #f1f5f9; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; background-color: var(--bg); display: flex; flex-direction: column; height: 100vh; overflow: hidden;}
+        
+        .top-toolbar { background: white; padding: 15px 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+        .page-title { margin: 0; font-size: 18px; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+        .btn-print { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 14px; transition: 0.2s;}
+        .btn-print:hover { background: #059669; }
+
+        .main-workspace { display: flex; flex: 1; overflow: hidden; }
+        
+        /* PANEL KIRI (FORMULIR) */
+        .form-panel { width: 45%; min-width: 400px; padding: 25px; overflow-y: auto; background: white; border-right: 1px solid #e2e8f0; z-index: 2;}
+        .form-section { background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+        .form-section h3 { margin-top: 0; font-size: 14px; color: #475569; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;}
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 6px; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 13px; box-sizing: border-box;}
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+        
+        .dynamic-box { background: white; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1; margin-bottom: 10px; position: relative;}
+        .btn-add { background: #eff6ff; color: var(--accent); border: 1px dashed #bfdbfe; width: 100%; padding: 10px; border-radius: 8px; font-weight: 700; cursor: pointer;}
+        .btn-add:hover { background: #dbeafe; }
+        .btn-add.alt { background: #fdf4ff; color: #c026d3; border-color: #f5d0fe; }
+        .btn-add.alt:hover { background: #fae8ff; }
+        .btn-del { position: absolute; top: 10px; right: 10px; background: #fee2e2; color: #e11d48; border: none; border-radius: 4px; cursor: pointer; width: 24px; height: 24px;}
+
+        .custom-area { background: #fffbeb; border: 1px solid #fde68a; padding: 15px; border-radius: 8px; margin-top: 10px; display: none; }
+        .custom-area label { color: #b45309; }
+
+        /* PANEL KANAN: EMBEDDED PDF VIEWER STYLE */
+        .preview-panel { 
+            flex: 1; 
+            background: #525659; /* Warna abu-abu khas PDF Viewer */
+            overflow: auto; 
+            padding: 40px 20px; 
+            display: flex; 
+            justify-content: center; 
+            align-items: flex-start;
+        }
+        
+        /* WRAPPER ANTI-SQUISH (Mencegah kertas terlipat/meremas teks) */
+        .pdf-viewer-wrapper {
+            min-width: max-content; 
+        }
+
+        .a4-paper { 
+            width: 210mm; 
+            min-height: 297mm; 
+            background: white; 
+            padding: 40mm 30mm 30mm 40mm; /* Atas 4cm, Kanan 3cm, Bawah 3cm, Kiri 4cm */
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4); 
+            font-family: Arial, Helvetica, sans-serif; 
+            font-size: 11pt; 
+            line-height: 1.5;
+            box-sizing: border-box;
+            color: black;
+        }
+
+        /* FORMAT TYPOGRAPHY LEGAL */
+        .doc-title { text-align: center; font-weight: bold; font-size: 12pt; text-decoration: underline; margin-bottom: 25px; letter-spacing: 1px;}
+        
+        /* Tabel Presisi Tinggi (Mengganti CSS Grid yang rawan berantakan) */
+        .table-pihak { width: 100%; border-collapse: collapse; margin-bottom: 5px; page-break-inside: avoid;}
+        .table-pihak td { vertical-align: top; padding-bottom: 3px; }
+        .td-num { width: 5%; }
+        .td-label { width: 20%; }
+        .td-colon { width: 3%; text-align: center;}
+        .td-value { width: 72%; text-align: justify;}
+        
+        .tujuan-khusus { text-align: center; font-weight: bold; font-size: 12pt; margin: 30px 0 20px 0; letter-spacing: 2px; }
+        .text-justify { text-align: justify; }
+
+        /* Posisi Tanda Tangan */
+        .table-ttd { width: 100%; margin-top: 40px; text-align: center; page-break-inside: avoid; border-collapse: collapse;}
+        .table-ttd td { vertical-align: top; width: 50%; }
+        
+        .ttd-space { height: 75px; }
+        .materai-box { display: inline-block; border: 1px dashed #666; font-size: 8pt; padding: 15px 5px; color: #666; text-align: center; margin-bottom: 5px; width: 80px;}
+
+     /* MODE CETAK (PRINT) */
+        @page {
+            size: A4 portrait;
+            margin: 0; /* Mematikan paksa margin default browser agar tidak double */
+        }
+        
+        @media print {
+            body { background: white; overflow: visible; height: auto; }
+            .top-toolbar, .form-panel { display: none !important; }
+            .main-workspace { display: block; overflow: visible; height: auto; }
+            .preview-panel { padding: 0; background: white; display: block; overflow: visible; align-items: flex-start; }
+            .pdf-viewer-wrapper { min-width: auto; display: block; width: 100%; }
+            .a4-paper { 
+                box-shadow: none; 
+                margin: 0; 
+                padding: 40mm 30mm 30mm 40mm; /* Margin standar dokumen legal */
+                width: 210mm; 
+                min-height: 297mm; 
+                page-break-after: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-toolbar">
+        <h2 class="page-title"><i class="fa-solid fa-file-pdf"></i> Generator Surat Kuasa (PDF View)</h2>
+        <button class="btn-print" onclick="window.print()"><i class="fa-solid fa-print"></i> Cetak A4 / Save as PDF</button>
+    </div>
+
+    <div class="main-workspace">
+        <div class="form-panel">
+            <div class="form-section">
+                <h3><i class="fa-solid fa-gear"></i> Jenis Keperluan & Instansi</h3>
+                <div class="form-group">
+                    <select id="in-jenis" onchange="toggleCustomTemplate()">
+                        <option value="pengecekan">Pengecekan Sertipikat (BPN)</option>
+                        <option value="waris_bpn">Turun Waris (BPN)</option>
+                        <option value="bphtb">Validasi BPHTB (BKAD / Bapenda)</option>
+                        <option value="waris_desa">Pengesahan Waris (Kalurahan)</option>
+                        <option value="oss_rba">Perizinan Berusaha (OSS RBA / DPMPTSP)</option>
+                        <option value="pajak_kpp">Pengurusan NPWP / Pajak (KPP Pratama)</option>
+                        <option value="custom">✨ LAINNYA (Ketik Sendiri Kalimatnya) ✨</option>
+                    </select>
+                </div>
+                
+                <div id="box-custom-template" class="custom-area">
+                    <div class="form-group">
+                        <label>Kalimat Pembuka (Contoh: menghadap ke PT PLN untuk...)</label>
+                        <textarea id="in-k-awal" rows="3" oninput="renderDoc()">menghadap kepada Pejabat Pemerintah yang berwenang guna mengurus...</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Kalimat Penutup & Hak Substitusi</label>
+                        <textarea id="in-k-akhir" rows="3" oninput="renderDoc()">Demikian Surat Kuasa ini kami buat dengan sebenarnya semoga dapat digunakan sebagaimana mestinya.</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3><i class="fa-solid fa-user-tie"></i> Penerima Kuasa (Yang Diberi Tugas)</h3>
+                <div id="penerima-container"></div>
+                <button class="btn-add alt" onclick="addPenerima()"><i class="fa-solid fa-plus"></i> Tambah Penerima Kuasa</button>
+            </div>
+
+            <div class="form-section">
+                <h3><i class="fa-solid fa-users"></i> Pemberi Kuasa (Klien / Ahli Waris)</h3>
+                <div id="pemberi-container"></div>
+                <button class="btn-add" onclick="addPemberi()"><i class="fa-solid fa-plus"></i> Tambah Pemberi Kuasa</button>
+            </div>
+
+            <div class="form-section">
+                <h3><i class="fa-solid fa-map-location-dot"></i> Detail Objek Terkait (Sertipikat / Dokumen)</h3>
+                <div class="form-group">
+                    <label>Deskripsi Objek (Kosongkan jika bukan urusan tanah)</label>
+                    <textarea id="in-objek" rows="3" oninput="renderDoc()" placeholder="Misal: Sertipikat Hak Milik No. 10058..."></textarea>
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h3><i class="fa-regular fa-calendar"></i> Titi Mangsa (Tanggal Surat)</h3>
+                <input type="date" id="in-tanggal" onchange="renderDoc()">
+            </div>
+        </div>
+
+        <div class="preview-panel">
+            <div class="pdf-viewer-wrapper">
+                <div class="a4-paper" id="a4-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dbPegawai = {
+            endri: { nama: "ENDRI PURWANI, S.H., M.Kn.", kerja: "Notaris - PPAT", alamat: "Jl. Palagan Tentara Pelajar KM 8,5 No.119, Sariharjo, Ngaglik, Sleman.", kontak: "" },
+            eka: { nama: "EKA FEBRIYANA", kerja: "Staf Notaris - PPAT ENDRI PURWANI, SH., M.Kn", alamat: "Jl. Palagan Tentara Pelajar KM.8,5 No.119, Sariharjo, Ngaglik, Sleman.", kontak: "Hp. 082324252902" },
+            triono: { nama: "TRIONO HANDOKO", kerja: "Staf Notaris - PPAT ENDRI PURWANI, S.H., M.Kn", alamat: "Kwarasan, RT 012, RW 008, Nogotirto, Gamping, Sleman.", kontak: "Hp. 085200000000" },
+            imam: { nama: "IMAM FALAHI", kerja: "Wiraswasta", alamat: "Margorejo Asri Blok R.02, RT 003, RW 030, Kel/Desa Margorejo, Kec. Tempel, Kab. Sleman.", kontak: "" }
+        };
+
+        const dbTemplate = {
+            pengecekan: { awal: "menghadap kepada Pejabat Pemerintah, khususnya Kantor Pertanahan setempat guna untuk Proses Pengecekan Sertipikat atas:", akhir: "Demikian Surat Kuasa ini diberikan dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya." },
+            waris_bpn: { awal: "menghadap kepada Pejabat Pemerintah, khususnya Kantor Pertanahan setempat guna mengurus proses dan mengambil asli Sertipikat hasil Proses Turun Waris, atas:", akhir: "Untuk maksud tersebut kepada Pemegang Kuasa diberikan hak untuk bertindak secara bersama-sama maupun sendiri-sendiri serta menandatangani tanda terimanya dan menerima Sertipikat Tanah.<br><br>Demikian Surat Kuasa ini diberikan dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya." },
+            bphtb: { awal: "menghadap kepada Pejabat Pemerintah, khususnya Kantor BKAD Kabupaten Sleman guna mengajukan Permohonan Validasi BPHTB atas transaksi Turun Waris:-", akhir: "Demikian Surat Kuasa ini kami buat dengan sebenarnya semoga dapat digunakan sebagaimana mestinya." },
+            waris_desa: { awal: "menghadap kepada Pejabat Pemerintah, khususnya Kalurahan setempat guna mengurus proses pengesahan dokumen waris atas:", akhir: "Untuk maksud tersebut kepada Pemegang Kuasa diberikan hak untuk mengurus segala proses yang berkaitan dengan pengesahan waris tersebut.<br><br>Demikian Surat Kuasa ini diberikan dengan sebenarnya." },
+            oss_rba: { awal: "menghadap kepada Pejabat Pemerintah, khususnya DPMPTSP / Lembaga OSS guna mengurus pendaftaran, pencabutan, atau pembaruan Nomor Induk Berusaha (NIB) dan perizinan dasar atas nama Pemberi Kuasa, terkait dengan:", akhir: "Untuk maksud tersebut Pemegang Kuasa berhak menandatangani formulir, menyerahkan dokumen kelengkapan, dan menerima bukti perizinan berusaha.<br><br>Demikian Surat Kuasa ini diberikan." },
+            pajak_kpp: { awal: "menghadap kepada Pejabat pada Kantor Pelayanan Pajak (KPP) Pratama guna mengurus permohonan cetak ulang, perubahan data, atau aktivasi EFIN atas identitas Wajib Pajak Pemberi Kuasa, sehubungan dengan:", akhir: "Segala akibat hukum dari pelaksanaan kuasa ini sepenuhnya menjadi tanggung jawab Pemberi Kuasa.<br><br>Demikian Surat Kuasa ini dibuat dengan sebenarnya." }
+        };
+
+        function addPenerima() {
+            const container = document.getElementById('penerima-container');
+            const idx = container.children.length + 1;
+            const div = document.createElement('div');
+            div.className = 'dynamic-box';
+            div.innerHTML = `
+                <button class="btn-del" onclick="this.parentElement.remove(); renderDoc();" title="Hapus"><i class="fa-solid fa-xmark"></i></button>
+                <div style="font-weight:700; font-size:12px; margin-bottom:8px; color:#c026d3;">PENERIMA KUASA ${idx}</div>
+                <div class="form-group">
+                    <select class="pn-preset" onchange="toggleManualPenerima(this); renderDoc();">
+                        <option value="endri">ENDRI PURWANI, S.H., M.Kn.</option>
+                        <option value="eka" selected>EKA FEBRIYANA</option>
+                        <option value="triono">TRIONO HANDOKO</option>
+                        <option value="imam">IMAM FALAHI</option>
+                        <option value="custom">✍️ Ketik Manual (Pegawai Lain/Freelance)</option>
+                    </select>
+                </div>
+                <div class="pn-manual" style="display:none; background:#f8fafc; padding:10px; border-radius:6px; border:1px solid #e2e8f0;">
+                    <input type="text" class="pn-nama" placeholder="Nama Lengkap..." oninput="renderDoc()" style="margin-bottom:8px;">
+                    <input type="text" class="pn-alamat" placeholder="Alamat..." oninput="renderDoc()" style="margin-bottom:8px;">
+                    <input type="text" class="pn-kerja" placeholder="Pekerjaan..." oninput="renderDoc()">
+                </div>
+            `;
+            container.appendChild(div);
+            renderDoc();
+        }
+
+        function toggleManualPenerima(selectElement) {
+            const manualBox = selectElement.parentElement.nextElementSibling;
+            manualBox.style.display = (selectElement.value === 'custom') ? 'block' : 'none';
+        }
+
+        function addPemberi() {
+            const container = document.getElementById('pemberi-container');
+            const idx = container.children.length + 1;
+            const div = document.createElement('div');
+            div.className = 'dynamic-box';
+            div.innerHTML = `
+                <button class="btn-del" onclick="this.parentElement.remove(); renderDoc();" title="Hapus"><i class="fa-solid fa-xmark"></i></button>
+                <div style="font-weight:700; font-size:12px; margin-bottom:8px; color:#2563eb;">PEMBERI KUASA ${idx}</div>
+                <input type="text" class="pb-nama" placeholder="Nama Lengkap..." oninput="renderDoc()" style="margin-bottom:8px;">
+                <input type="text" class="pb-kerja" placeholder="Pekerjaan..." oninput="renderDoc()" style="margin-bottom:8px;">
+                <input type="text" class="pb-alamat" placeholder="Alamat Letak..." oninput="renderDoc()">
+            `;
+            container.appendChild(div);
+            renderDoc();
+        }
+
+        function toggleCustomTemplate() {
+            const jenis = document.getElementById('in-jenis').value;
+            document.getElementById('box-custom-template').style.display = (jenis === 'custom') ? 'block' : 'none';
+            renderDoc();
+        }
+
+        function renderDoc() {
+            const jenis = document.getElementById('in-jenis').value;
+            let narasiAwal = "", narasiAkhir = "";
+            if (jenis === 'custom') {
+                narasiAwal = document.getElementById('in-k-awal').value.replace(/\n/g, "<br>");
+                narasiAkhir = document.getElementById('in-k-akhir').value.replace(/\n/g, "<br>");
+            } else {
+                narasiAwal = dbTemplate[jenis].awal;
+                narasiAkhir = dbTemplate[jenis].akhir;
+            }
+
+            // 1. Rendering Pihak Pemberi Kuasa
+            const nodePemberi = document.querySelectorAll('#pemberi-container .dynamic-box');
+            let htmlPemberi = "";
+            let arrPemberi = [];
+            nodePemberi.forEach((node, idx) => {
+                const num = nodePemberi.length > 1 ? `${idx + 1}. ` : "";
+                const nama = node.querySelector('.pb-nama').value || '...................................................';
+                const kerja = node.querySelector('.pb-kerja').value || '...................................................';
+                const alamat = node.querySelector('.pb-alamat').value || '...................................................';
+                arrPemberi.push({ num, nama });
+                
+                htmlPemberi += `
+                    <table class="table-pihak">
+                        <tr>
+                            <td class="td-num">${num}</td>
+                            <td class="td-label">Nama</td><td class="td-colon">:</td>
+                            <td class="td-value"><b>${nama.toUpperCase()}</b></td>
+                        </tr>
+                        <tr>
+                            <td></td>
+                            <td>Pekerjaan</td><td>:</td>
+                            <td class="td-value">${kerja}</td>
+                        </tr>
+                        <tr>
+                            <td></td>
+                            <td>Alamat</td><td>:</td>
+                            <td class="td-value">${alamat}</td>
+                        </tr>
+                    </table>
+                `;
+            });
+            if (arrPemberi.length === 0) htmlPemberi = "<i>(Data Pemberi Kuasa Kosong)</i><br><br>";
+
+            // 2. Rendering Pihak Penerima Kuasa
+            const nodePenerima = document.querySelectorAll('#penerima-container .dynamic-box');
+            let htmlPenerima = "";
+            let arrPenerima = [];
+            nodePenerima.forEach((node, idx) => {
+                const num = nodePenerima.length > 1 ? `${idx + 1}. ` : "";
+                const preset = node.querySelector('.pn-preset').value;
+                let dataPn = {};
+                
+                if (preset === 'custom') {
+                    dataPn.nama = node.querySelector('.pn-nama').value || '...................................................';
+                    dataPn.alamat = node.querySelector('.pn-alamat').value || '...................................................';
+                    dataPn.kerja = node.querySelector('.pn-kerja').value || '...................................................';
+                    dataPn.kontak = "";
+                } else {
+                    dataPn = dbPegawai[preset];
+                }
+                arrPenerima.push({ num, nama: dataPn.nama, kontak: dataPn.kontak });
+                
+                htmlPenerima += `
+                    <table class="table-pihak">
+                        <tr>
+                            <td class="td-num">${num}</td>
+                            <td class="td-label">Nama</td><td class="td-colon">:</td>
+                            <td class="td-value"><b>${dataPn.nama}</b></td>
+                        </tr>
+                        <tr>
+                            <td></td>
+                            <td>Alamat</td><td>:</td>
+                            <td class="td-value">${dataPn.alamat}</td>
+                        </tr>
+                        <tr>
+                            <td></td>
+                            <td>Pekerjaan</td><td>:</td>
+                            <td class="td-value">${dataPn.kerja}</td>
+                        </tr>
+                    </table>
+                `;
+            });
+            if (arrPenerima.length === 0) htmlPenerima = "<i>(Data Penerima Kuasa Kosong)</i><br><br>";
+
+            // 3. Rendering Objek
+            const objek = document.getElementById('in-objek').value;
+            let htmlObjek = objek ? `■ ${objek.replace(/\n/g, "<br>")}-<br><br>` : "";
+
+            // 4. Rendering Tanggal 
+            const tglRaw = document.getElementById('in-tanggal').value;
+            const d = new Date(tglRaw);
+            const tglTeks = tglRaw ? "Sleman, " + new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(d) : "Sleman, ................................";
+
+            // 5. Rendering Tanda Tangan
+            let blokTtdPenerima = "";
+            arrPenerima.forEach(pn => {
+                const isKontak = pn.kontak ? `<br>${pn.kontak}` : "";
+                blokTtdPenerima += `<br><br><br><br><b>(${pn.nama.toUpperCase()})</b>${isKontak}<br>`;
+            });
+
+            let blokTtdPemberi = "";
+            arrPemberi.forEach((pb, idx) => {
+                const materai = (idx === 0) ? `<div class="materai-box">MATERAI<br>TEMPEL<br>10000</div>` : `<div style="height:60px;"></div>`;
+                blokTtdPemberi += `<br>${materai}<br><b>(${pb.nama.toUpperCase()})</b><br>`;
+            });
+
+            // 6. Menyusun Lembar A4
+            const htmlFull = `
+                <div class="doc-title">SURAT KUASA</div>
+                
+                Yang bertanda tangan dibawah ini:<br>
+                ${htmlPemberi}
+                
+                <br>Dengan ini menyatakan memberi kuasa kepada :<br>
+                ${htmlPenerima}
+                
+                <div class="tujuan-khusus">KHUSUS</div>
+                
+                <div class="text-justify">
+                    Untuk dan atas nama serta buat kepentingan Pemberi Kuasa ${narasiAwal}
+                    <br><br>
+                    ${htmlObjek}
+                    ${narasiAkhir}
+                </div>
+                
+                <table class="table-ttd">
+                    <tr>
+                        <td></td>
+                        <td style="text-align: center;">${tglTeks}</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: center;">
+                            <br>Penerima Kuasa
+                            ${blokTtdPenerima}
+                        </td>
+                        <td style="text-align: center;">
+                            <br>Pemberi Kuasa
+                            ${blokTtdPemberi}
+                        </td>
+                    </tr>
+                </table>
+            `;
+            document.getElementById('a4-content').innerHTML = htmlFull;
+        }
+
+        window.onload = () => {
+            document.getElementById('in-tanggal').value = new Date().toISOString().split('T')[0];
+            addPenerima(); 
+            addPemberi(); 
+        };
+    </script>
+</body>
+</html>

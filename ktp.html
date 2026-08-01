@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="Expires" content="0">
+    <title>Lokal KTP OCR & Parser (Presisi Tinggi)</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 30px; display: flex; flex-direction: column; align-items: center; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 900px; display: flex; flex-wrap: wrap; gap: 20px; }
+        h2 { color: #2c3e50; margin-top: 0; width: 100%; text-align: center; border-bottom: 2px solid #ecf0f1; padding-bottom: 15px; }
+        
+        .upload-section { flex: 1; min-width: 350px; display: flex; flex-direction: column; align-items: center; }
+        .result-section { flex: 1; min-width: 350px; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0; }
+        
+        input[type="file"] { display: none; }
+        .btn-upload { background-color: #2980b9; color: white; padding: 15px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; text-align: center; transition: 0.3s; display: block; box-sizing: border-box; }
+        .btn-upload:hover { background-color: #3498db; }
+        
+        #preview-container { width: 100%; height: 250px; border: 2px dashed #bdc3c7; border-radius: 8px; margin-top: 15px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #ecf0f1; }
+        #preview-img { max-width: 100%; max-height: 100%; display: none; }
+        
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; font-weight: bold; font-size: 13px; color: #34495e; margin-bottom: 5px; }
+        .input-row { display: flex; gap: 10px; }
+        .input-row input { flex: 1; padding: 12px; border: 1px solid #bdc3c7; border-radius: 5px; font-size: 14px; background: white; }
+        .btn-copy { background-color: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s;}
+        .btn-copy:hover { background-color: #2ecc71; }
+        
+        #status { width: 100%; text-align: center; margin-top: 20px; font-weight: bold; color: #d35400; font-size: 14px;}
+        
+        /* Modifikasi Data Mentah: Ukuran lebih besar dan bisa ditarik vertikal */
+        #raw-text { 
+            width: 100%; 
+            height: 250px; 
+            margin-top: 10px; 
+            padding: 15px; 
+            font-family: monospace; 
+            font-size: 14px; 
+            border: 1px solid #ccc; 
+            border-radius: 5px; 
+            display: none; 
+            box-sizing: border-box;
+            background-color: #fff;
+            resize: vertical; 
+        }
+        canvas { display: none; } 
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🪪 OCR Ekstraksi Data KTP (Presisi Tinggi)</h2>
+    
+    <div class="upload-section">
+        <label class="btn-upload">
+            📸 Upload Foto / Scan KTP
+            <input type="file" id="ktpInput" accept="image/*">
+        </label>
+        <div id="preview-container">
+            <span id="placeholder-text" style="color: #7f8c8d; font-size: 14px;">Preview KTP akan muncul di sini</span>
+            <img id="preview-img" src="">
+        </div>
+        <div id="status"></div>
+        
+        <label style="display: block; margin-top: 20px; font-weight: bold; font-size: 13px; color: #34495e; width: 100%; text-align:left;">Data Mentah OCR (Bisa diperbesar ke bawah):</label>
+        <textarea id="raw-text" readonly placeholder="Hasil scan murni mesin AI akan tampil di sini..."></textarea>
+    </div>
+
+    <div class="result-section">
+        <div class="input-group">
+            <label>NIK</label>
+            <div class="input-row">
+                <input type="text" id="res-nik" placeholder="16 Digit NIK...">
+                <button class="btn-copy" onclick="copyText('res-nik', this)">Copy</button>
+            </div>
+        </div>
+        
+        <div class="input-group">
+            <label>NAMA LENGKAP</label>
+            <div class="input-row">
+                <input type="text" id="res-nama" placeholder="Nama Lengkap...">
+                <button class="btn-copy" onclick="copyText('res-nama', this)">Copy</button>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label>TEMPAT / TGL LAHIR</label>
+            <div class="input-row">
+                <input type="text" id="res-ttl" placeholder="Tempat, DD-MM-YYYY">
+                <button class="btn-copy" onclick="copyText('res-ttl', this)">Copy</button>
+            </div>
+        </div>
+        
+        <div class="input-group">
+            <label>ALAMAT LENGKAP (Termasuk RT/RW/Kel/Kec)</label>
+            <div class="input-row">
+                <input type="text" id="res-alamat" placeholder="Jalan, RT/RW, Kelurahan, Kecamatan...">
+                <button class="btn-copy" onclick="copyText('res-alamat', this)">Copy</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<canvas id="processCanvas"></canvas>
+
+<script>
+    document.getElementById('ktpInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const img = document.getElementById('preview-img');
+        const reader = new FileReader();
+        
+        reader.onload = function(event) {
+            img.src = event.target.result;
+            img.style.display = 'block';
+            document.getElementById('placeholder-text').style.display = 'none';
+            img.onload = () => runOCR(img);
+        };
+        reader.readAsDataURL(file);
+    });
+
+    async function runOCR(imageElement) {
+        const statusEl = document.getElementById('status');
+        const rawTextEl = document.getElementById('raw-text');
+        
+        // Reset Kolom
+        ['res-nik', 'res-nama', 'res-ttl', 'res-alamat', 'raw-text'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        rawTextEl.style.display = 'block';
+
+        statusEl.innerText = "⏳ Tahap 1: Mempertajam gambar (Grayscale Filter)...";
+
+        // Binarization & Kontras Keras
+        const canvas = document.getElementById('processCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = imageElement.naturalWidth;
+        canvas.height = imageElement.naturalHeight;
+        
+        // Membunuh warna biru background KTP agar tulisan hitam lebih kontras
+        ctx.filter = 'grayscale(100%) contrast(180%) brightness(110%)';
+        ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
+        
+        const processedDataUrl = canvas.toDataURL('image/jpeg');
+
+        statusEl.innerText = "🔍 Tahap 2: AI sedang membaca teks (Tunggu 5-15 detik)...";
+
+        try {
+            const result = await Tesseract.recognize(
+                processedDataUrl,
+                'ind',
+                { logger: m => {
+                    if (m.status === 'recognizing text') {
+                        statusEl.innerText = `🔍 AI membaca teks: ${Math.round(m.progress * 100)}%`;
+                    }
+                }}
+            );
+
+            const text = result.data.text;
+            rawTextEl.value = text;
+            statusEl.innerText = "✅ Selesai mengekstrak data! Mengurutkan format...";
+            
+            parseKTPData(text);
+
+        } catch (error) {
+            console.error(error);
+            statusEl.innerText = "❌ Gagal memproses KTP. Pastikan gambar tidak blur/terpotong.";
+        }
+    }
+
+    function parseKTPData(text) {
+        // Membersihkan teks mentah, mengubah ke Uppercase, membuang baris kosong
+        const lines = text.split('\n').map(line => line.trim().toUpperCase()).filter(line => line.length > 2);
+
+        let nik = '', nama = '', ttl = '', alamat = '';
+
+        // 1. Ekstrak NIK (Priority Matching 16 Digit)
+        const nikMatch = text.match(/\b\d{16}\b/);
+        if (nikMatch) {
+            nik = nikMatch[0];
+        } else {
+            const nikLine = lines.find(l => l.includes('NIK'));
+            if (nikLine) nik = nikLine.replace(/[^0-9]/g, '').substring(0, 16);
+        }
+
+        // 2. Ekstrak NAMA LENGKAP
+        const namaLine = lines.find(l => l.includes('NAMA'));
+        if (namaLine) {
+            nama = namaLine.substring(namaLine.indexOf('NAMA') + 4).replace(/^[^A-Z]+/, '').trim();
+        }
+
+        // 3. Ekstrak TTL
+        const ttlLine = lines.find(l => l.includes('LAHIR') || l.includes('TEMPAT'));
+        if (ttlLine) {
+            let keyword = ttlLine.includes('LAHIR') ? 'LAHIR' : 'TEMPAT';
+            ttl = ttlLine.substring(ttlLine.indexOf(keyword) + keyword.length).replace(/^[^A-Z0-9]+/, '').trim();
+        }
+
+        // 4. ALAMAT LENGKAP (Algoritma Look-Ahead)
+        let alamatIndex = lines.findIndex(l => l.includes('ALAMAT'));
+        if (alamatIndex !== -1) {
+            let alamatParts = [];
+            
+            // Ambil jalan utama
+            let jalan = lines[alamatIndex].substring(lines[alamatIndex].indexOf('ALAMAT') + 6).replace(/^[^A-Z0-9]+/, '').trim();
+            if (jalan) alamatParts.push(jalan);
+
+            // Loop 4 baris ke bawah untuk mengambil struktur berjenjang (RT/RW, KELURAHAN, KECAMATAN)
+            for (let i = alamatIndex + 1; i <= alamatIndex + 4 && i < lines.length; i++) {
+                let nextLine = lines[i];
+                
+                // Jika algoritma mendeteksi blok baru (Agama/Status/Pekerjaan), hentikan penyatuan alamat
+                if (nextLine.includes('AGAMA') || nextLine.includes('STATUS') || nextLine.includes('PERKAWINAN') || nextLine.includes('GOL. DARAH')) {
+                    break;
+                }
+                
+                // Bersihkan simbol titik dua, sama dengan, atau strip di awal kalimat yang sering error dibaca OCR
+                let cleanPart = nextLine.replace(/^[^A-Z0-9]+/, '').trim();
+                
+                // Format agar rapi, tambahkan awalan otomatis jika OCR KTP mendeteksi kode wilayah
+                if (cleanPart.includes('RT') || cleanPart.includes('RW')) {
+                    alamatParts.push(cleanPart);
+                } else if (cleanPart.includes('KEL') || cleanPart.includes('DESA')) {
+                    alamatParts.push(cleanPart);
+                } else if (cleanPart.includes('KEC')) {
+                    alamatParts.push(cleanPart);
+                } else if (cleanPart.length > 3) {
+                    alamatParts.push(cleanPart); // Tangkap data lain yang mungkin terlewat
+                }
+            }
+            
+            // Satukan array dengan koma spasi
+            alamat = alamatParts.join(', ');
+        }
+
+        // Output ke UI
+        document.getElementById('res-nik').value = nik;
+        document.getElementById('res-nama').value = nama;
+        document.getElementById('res-ttl').value = ttl;
+        document.getElementById('res-alamat').value = alamat;
+    }
+
+    function copyText(elementId, btnElement) {
+        const copyText = document.getElementById(elementId);
+        copyText.select();
+        copyText.setSelectionRange(0, 99999); 
+        document.execCommand("copy");
+        
+        const originalText = btnElement.innerText;
+        btnElement.innerText = "Tersalin!";
+        btnElement.style.backgroundColor = "#2c3e50";
+        setTimeout(() => {
+            btnElement.innerText = originalText;
+            btnElement.style.backgroundColor = "#27ae60";
+        }, 1500);
+    }
+</script>
+
+</body>
+</html>
