@@ -1,84 +1,153 @@
 <?php
-include 'koneksi.php';
+declare(strict_types=1);
 
-// Menyamakan nama variabel koneksi agar bisa dipakai oleh kode di bawahnya
+require_once __DIR__ . '/config/tenant.php';
+require_once __DIR__ . '/config/audit.php';
+require_once __DIR__ . '/koneksi.php';
+
 $conn = $koneksi;
 
-header("Access-Control-Allow-Origin: *");
-header("Content-Type: application/json; charset=UTF-8");
-header("Access-Control-Allow-Methods: POST, GET");
-
-
-
-// Fitur Cerdas: Membuat Tabel Otomatis jika belum ada
-$sql_create = "CREATE TABLE IF NOT EXISTS tabel_invoice (
-    id INT(11) AUTO_INCREMENT PRIMARY KEY,
-    no_invoice VARCHAR(100),
-    nama_pihak VARCHAR(255),
-    data_json LONGTEXT,
-    waktu_simpan TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-)";
-$conn->query($sql_create);
+header('Content-Type: application/json; charset=UTF-8');
+security_headers();
 
 $action = $_GET['action'] ?? '';
 
-// LOGIKA 1: MENYIMPAN DATA (CREATE / UPDATE)
-if ($action == 'save') {
-    $data = json_decode(file_get_contents("php://input"), true);
-    if (!$data) {
-        echo json_encode(["status" => "error", "pesan" => "Tidak ada data yang dikirim"]);
-        exit;
+// The tenant migration must be applied before this endpoint is enabled.
+// We deliberately do not auto-create or ALTER business tables at request time.
+$columnCheck = $conn->query("SHOW COLUMNS FROM tabel_invoice LIKE 'tenant_id'");
+if (!$columnCheck || $columnCheck->num_rows !== 1) {
+    json_response([
+        'status' => 'error',
+        'pesan' => 'Struktur invoice belum siap untuk mode tenant',
+    ], 503);
+}
+
+if ($action === 'load') {
+    $user = require_tenant_user();
+    $tenantId = tenant_id_from_user($user);
+
+    $stmt = $conn->prepare(
+        'SELECT id, no_invoice, nama_pihak, data_json
+         FROM tabel_invoice
+         WHERE tenant_id = ?
+         ORDER BY id DESC'
+    );
+    if (!$stmt) {
+        json_response(['status' => 'error', 'pesan' => 'Layanan invoice tidak tersedia'], 500);
     }
 
-    $id = $data['id'] ?? null;
-    $no_invoice = $conn->real_escape_string($data['no_invoice']);
-    
-    // Perbaikan nama pihak untuk mode umum (jika klien 2 kosong)
-    $p1 = trim($data['penjual']);
-    $p2 = trim($data['pembeli']);
-    $nama_pihak_raw = $p2 ? "$p1 & $p2" : $p1;
-    $nama_pihak = $conn->real_escape_string($nama_pihak_raw);
-    
-    $data_json = $conn->real_escape_string(json_encode($data));
+    $stmt->bind_param('i', $tenantId);
+    $stmt->execute();
+    $result = $stmt->get_result();
 
-    // Jika ID sudah ada, timpa data lama (Update). Jika belum, buat baru (Insert).
-    if ($id) {
-        $sql = "UPDATE tabel_invoice SET no_invoice='$no_invoice', nama_pihak='$nama_pihak', data_json='$data_json' WHERE id=$id";
-    } else {
-        $sql = "INSERT INTO tabel_invoice (no_invoice, nama_pihak, data_json) VALUES ('$no_invoice', '$nama_pihak', '$data_json')";
-    }
-
-    if ($conn->query($sql) === TRUE) {
-        $insert_id = $id ? $id : $conn->insert_id;
-        echo json_encode(["status" => "success", "id" => $insert_id]);
-    } else {
-        echo json_encode(["status" => "error", "pesan" => $conn->error]);
-    }
-} 
-// LOGIKA 2: MEMANGGIL DATA KE LAYAR (READ)
-elseif ($action == 'load') {
-    $result = $conn->query("SELECT id, no_invoice, nama_pihak, data_json FROM tabel_invoice ORDER BY id DESC");
     $arsip = [];
     while ($row = $result->fetch_assoc()) {
-        // Memecah kembali string DNA menjadi format JSON asli
+        $decoded = json_decode((string) $row['data_json'], true);
         $arsip[] = [
-            "id" => $row['id'],
-            "no_invoice" => $row['no_invoice'],
-            "nama_pihak" => $row['nama_pihak'],
-            "data_json" => json_decode($row['data_json'], true)
+            'id' => (int) $row['id'],
+            'no_invoice' => $row['no_invoice'],
+            'nama_pihak' => $row['nama_pihak'],
+            'data_json' => is_array($decoded) ? $decoded : null,
         ];
     }
-    echo json_encode($arsip);
-}
-// LOGIKA 3: MENGHAPUS DATA PERMANEN (DELETE)
-elseif ($action == 'delete') {
-    $id = (int)($_GET['id'] ?? 0);
-    if ($conn->query("DELETE FROM tabel_invoice WHERE id=$id")) {
-        echo json_encode(["status" => "success"]);
-    } else {
-        echo json_encode(["status" => "error"]);
-    }
+
+    $stmt->close();
+    json_response($arsip);
 }
 
-$conn->close();
-?>
+if ($action === 'save') {
+    $user = require_tenant_user();
+    require_post();
+    require_csrf();
+    $tenantId = tenant_id_from_user($user);
+
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!is_array($data)) {
+        json_response(['status' => 'error', 'pesan' => 'Data JSON tidak valid'], 422);
+    }
+
+    $noInvoice = trim((string) ($data['no_invoice'] ?? ''));
+    $penjual = trim((string) ($data['penjual'] ?? ''));
+    $pembeli = trim((string) ($data['pembeli'] ?? ''));
+
+    if ($noInvoice === '' || $penjual === '') {
+        json_response(['status' => 'error', 'pesan' => 'Nomor invoice dan penjual wajib diisi'], 422);
+    }
+
+    $namaPihak = $pembeli !== '' ? "$penjual & $pembeli" : $penjual;
+    $dataJson = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($dataJson === false) {
+        json_response(['status' => 'error', 'pesan' => 'Data invoice tidak dapat diproses'], 422);
+    }
+
+    $id = isset($data['id']) && is_numeric($data['id']) ? (int) $data['id'] : 0;
+
+    if ($id > 0) {
+        $stmt = $conn->prepare(
+            'UPDATE tabel_invoice
+             SET no_invoice = ?, nama_pihak = ?, data_json = ?
+             WHERE id = ? AND tenant_id = ?'
+        );
+        if (!$stmt) {
+            json_response(['status' => 'error', 'pesan' => 'Layanan invoice tidak tersedia'], 500);
+        }
+        $stmt->bind_param('sssii', $noInvoice, $namaPihak, $dataJson, $id, $tenantId);
+        $stmt->execute();
+
+        if ($stmt->affected_rows === 0) {
+            $stmt->close();
+            json_response(['status' => 'error', 'pesan' => 'Invoice tidak ditemukan atau bukan milik kantor ini'], 404);
+        }
+
+        $stmt->close();
+        audit_log($conn, 'invoice.update', 'invoice', (string) $id);
+        json_response(['status' => 'success', 'id' => $id]);
+    }
+
+    $stmt = $conn->prepare(
+        'INSERT INTO tabel_invoice (tenant_id, no_invoice, nama_pihak, data_json)
+         VALUES (?, ?, ?, ?)'
+    );
+    if (!$stmt) {
+        json_response(['status' => 'error', 'pesan' => 'Layanan invoice tidak tersedia'], 500);
+    }
+
+    $stmt->bind_param('isss', $tenantId, $noInvoice, $namaPihak, $dataJson);
+    $stmt->execute();
+    $insertId = $conn->insert_id;
+    $stmt->close();
+
+    audit_log($conn, 'invoice.create', 'invoice', (string) $insertId);
+    json_response(['status' => 'success', 'id' => $insertId]);
+}
+
+if ($action === 'delete') {
+    $user = require_tenant_user();
+    require_post();
+    require_csrf();
+    $tenantId = tenant_id_from_user($user);
+    $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
+
+    if (!$id || $id < 1) {
+        json_response(['status' => 'error', 'pesan' => 'ID invoice tidak valid'], 422);
+    }
+
+    $stmt = $conn->prepare('DELETE FROM tabel_invoice WHERE id = ? AND tenant_id = ?');
+    if (!$stmt) {
+        json_response(['status' => 'error', 'pesan' => 'Layanan invoice tidak tersedia'], 500);
+    }
+
+    $stmt->bind_param('ii', $id, $tenantId);
+    $stmt->execute();
+    $deleted = $stmt->affected_rows;
+    $stmt->close();
+
+    if ($deleted !== 1) {
+        json_response(['status' => 'error', 'pesan' => 'Invoice tidak ditemukan atau bukan milik kantor ini'], 404);
+    }
+
+    audit_log($conn, 'invoice.delete', 'invoice', (string) $id);
+    json_response(['status' => 'success']);
+}
+
+json_response(['status' => 'error', 'pesan' => 'Aksi tidak dikenal'], 400);
