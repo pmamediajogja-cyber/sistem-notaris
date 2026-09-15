@@ -2,10 +2,11 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config/tenant.php';
+require_once __DIR__ . '/config/api_guard.php';
 require_once __DIR__ . '/config/audit.php';
 require_once __DIR__ . '/koneksi.php';
 
-$conn=$koneksi; security_headers(); $user=require_tenant_user(); $tenantId=tenant_id_from_user($user); $action=$_GET['action']??'list';
+$conn=$koneksi; security_headers(); $action=$_GET['action']??'list'; $user=api_guard($action!=='list'); $tenantId=tenant_id_from_user($user);
 
 if($action==='list'){
     $matterId=isset($_GET['matter_id'])&&is_numeric($_GET['matter_id'])?(int)$_GET['matter_id']:0;
@@ -17,7 +18,7 @@ if($action==='list'){
 }
 
 if($action==='change'){
-    require_post(); require_csrf(); $data=json_decode(file_get_contents('php://input'),true);
+    $data=json_decode(file_get_contents('php://input'),true);
     if(!is_array($data)) json_response(['status'=>'error','pesan'=>'Data status tidak valid'],422);
     $matterId=isset($data['matter_id'])&&is_numeric($data['matter_id'])?(int)$data['matter_id']:0; $to=trim((string)($data['to_status']??'')); $note=trim((string)($data['note']??''));
     if($matterId<1||$to===''||mb_strlen($to)>30||mb_strlen($note)>10000) json_response(['status'=>'error','pesan'=>'Data status tidak valid'],422);
