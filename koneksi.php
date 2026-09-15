@@ -1,13 +1,6 @@
 <?php
-$host     = "localhost";
-$username = "root";      // Sesuaikan dengan username MySQL Anda
-$password = "";          // Sesuaikan dengan password MySQL Anda (kosongkan jika bawaan XAMPP)
-$database = "notaris";   // Nama database Anda
+declare(strict_types=1);
 
-$koneksi = mysqli_connect($host, $username, $password, $database);
+require_once __DIR__ . '/config/database.php';
 
-// Periksa Koneksi
-if (!$koneksi) {
-    die("Koneksi ke database gagal: " . mysqli_connect_error());
-}
-?>
+$koneksi = database_connection();
