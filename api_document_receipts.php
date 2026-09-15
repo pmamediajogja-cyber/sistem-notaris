@@ -8,7 +8,7 @@ require_once __DIR__ . '/koneksi.php';
 
 security_headers();
 $action = $_GET['action'] ?? 'list';
-$user = api_guard($action !== 'list');
+$user = api_guard($action === 'create');
 $tenantId = tenant_id_from_user($user);
 $conn = $koneksi;
 
