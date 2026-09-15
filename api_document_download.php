@@ -3,11 +3,12 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config/tenant.php';
 require_once __DIR__ . '/config/audit.php';
+require_once __DIR__ . '/config/api_guard.php';
 require_once __DIR__ . '/koneksi.php';
 
 $conn = $koneksi;
 security_headers();
-$user = require_tenant_user();
+$user = api_guard(false);
 $tenantId = tenant_id_from_user($user);
 
 $documentId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
