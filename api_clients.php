@@ -2,15 +2,15 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config/tenant.php';
+require_once __DIR__ . '/config/api_guard.php';
 require_once __DIR__ . '/config/audit.php';
 require_once __DIR__ . '/koneksi.php';
 
 $conn = $koneksi;
 security_headers();
-
-$user = require_tenant_user();
-$tenantId = tenant_id_from_user($user);
 $action = $_GET['action'] ?? 'list';
+$user = api_guard($action !== 'list');
+$tenantId = tenant_id_from_user($user);
 
 if ($action === 'list') {
     $stmt = $conn->prepare(
@@ -28,8 +28,6 @@ if ($action === 'list') {
 }
 
 if ($action === 'save') {
-    require_post();
-    require_csrf();
     $data = json_decode(file_get_contents('php://input'), true);
     if (!is_array($data)) json_response(['status' => 'error', 'pesan' => 'Data klien tidak valid'], 422);
 
@@ -71,8 +69,6 @@ if ($action === 'save') {
 }
 
 if ($action === 'delete') {
-    require_post();
-    require_csrf();
     $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
     if (!$id || $id < 1) json_response(['status' => 'error', 'pesan' => 'ID klien tidak valid'], 422);
     $stmt = $conn->prepare('UPDATE clients SET status = \'inactive\' WHERE id = ? AND tenant_id = ?');
