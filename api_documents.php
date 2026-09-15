@@ -3,9 +3,10 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config/tenant.php';
 require_once __DIR__ . '/config/audit.php';
+require_once __DIR__ . '/config/api_guard.php';
 require_once __DIR__ . '/koneksi.php';
 
-$conn=$koneksi; security_headers(); $user=require_tenant_user(); $tenantId=tenant_id_from_user($user); $action=$_GET['action']??'list';
+$conn=$koneksi; security_headers(); $action=$_GET['action']??'list'; $user=api_guard($action!=='list'); $tenantId=tenant_id_from_user($user);
 
 function private_storage_root(): string {
     $root=rtrim((string)env_value('STORAGE_ROOT',''),DIRECTORY_SEPARATOR);
@@ -23,7 +24,6 @@ if($action==='list'){
 }
 
 if($action==='upload'){
-    require_post(); require_csrf();
     $matterId=filter_input(INPUT_POST,'matter_id',FILTER_VALIDATE_INT);
     if(!$matterId||$matterId<1||!isset($_FILES['file'])) json_response(['status'=>'error','pesan'=>'Perkara dan file wajib diisi'],422);
     $check=$conn->prepare('SELECT id FROM matters WHERE id=? AND tenant_id=? LIMIT 1');
@@ -44,33 +44,21 @@ if($action==='upload'){
     if(!move_uploaded_file($tmp,$destination)){@unlink($destination);json_response(['status'=>'error','pesan'=>'File gagal disimpan'],500);}
     @chmod($destination,0600); $sha=hash_file('sha256',$destination); if($sha===false){@unlink($destination);json_response(['status'=>'error','pesan'=>'Hash file gagal dibuat'],500);}
 
-    $docId=0;
-    $conn->begin_transaction();
+    $docId=0; $conn->begin_transaction();
     try {
         $stmt=$conn->prepare('INSERT INTO documents (tenant_id,matter_id,original_name,storage_key,mime_type,size_bytes,sha256,uploaded_by) VALUES (?,?,?,?,?,?,?,?)');
         if(!$stmt) throw new RuntimeException('document insert prepare failed');
-        $uploadedBy=(int)$user['user_id'];
-        $stmt->bind_param('iisssisi',$tenantId,$matterId,$original,$relative,$mime,$size,$sha,$uploadedBy);
-        if(!$stmt->execute()) { $stmt->close(); throw new RuntimeException('document insert failed'); }
-        $docId=$conn->insert_id; $stmt->close();
-
+        $uploadedBy=(int)$user['user_id']; $stmt->bind_param('iisssisi',$tenantId,$matterId,$original,$relative,$mime,$size,$sha,$uploadedBy);
+        if(!$stmt->execute()){ $stmt->close(); throw new RuntimeException('document insert failed'); } $docId=$conn->insert_id; $stmt->close();
         $store=$conn->prepare("INSERT INTO document_storage (tenant_id,document_id,storage_key,provider) VALUES (?,?,?,'local')");
-        if(!$store) throw new RuntimeException('storage insert prepare failed');
-        $store->bind_param('iis',$tenantId,$docId,$relative);
-        if(!$store->execute()) { $store->close(); throw new RuntimeException('storage insert failed'); }
-        $store->close();
-        $conn->commit();
-    } catch(Throwable $e) {
-        $conn->rollback();
-        @unlink($destination);
-        json_response(['status'=>'error','pesan'=>'Dokumen gagal disimpan'],500);
-    }
-
+        if(!$store) throw new RuntimeException('storage insert prepare failed'); $store->bind_param('iis',$tenantId,$docId,$relative);
+        if(!$store->execute()){ $store->close(); throw new RuntimeException('storage insert failed'); } $store->close(); $conn->commit();
+    } catch(Throwable $e) { $conn->rollback(); @unlink($destination); json_response(['status'=>'error','pesan'=>'Dokumen gagal disimpan'],500); }
     audit_log($conn,'document.upload','documents',(string)$docId); json_response(['status'=>'success','id'=>$docId]);
 }
 
 if($action==='delete'){
-    require_post(); require_csrf(); $id=filter_input(INPUT_POST,'id',FILTER_VALIDATE_INT);
+    $id=filter_input(INPUT_POST,'id',FILTER_VALIDATE_INT);
     if(!$id||$id<1) json_response(['status'=>'error','pesan'=>'ID dokumen tidak valid'],422);
     $stmt=$conn->prepare('UPDATE documents SET status=\'deleted\', deleted_at=CURRENT_TIMESTAMP WHERE id=? AND tenant_id=? AND deleted_at IS NULL');
     if(!$stmt) json_response(['status'=>'error','pesan'=>'Layanan dokumen tidak tersedia'],500);
