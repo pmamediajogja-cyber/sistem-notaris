@@ -41,13 +41,13 @@ if ($action === 'save') {
     if($id>0){
         $stmt=$conn->prepare('UPDATE matters SET client_id=?, matter_code=NULLIF(?,\'\'), title=?, service_type=NULLIF(?,\'\'), deed_type=NULLIF(?,\'\'), status=?, opened_at=?, closed_at=?, assigned_user_id=?, notes=NULLIF(?,\'\') WHERE id=? AND tenant_id=?');
         if(!$stmt) json_response(['status'=>'error','pesan'=>'Layanan perkara tidak tersedia'],500);
-        $stmt->bind_param('issssssiiis', $clientId,$code,$title,$service,$deed,$status,$openedValue,$closedValue,$assignedValue,$notes,$id,$tenantId);
+        $stmt->bind_param('issssssisis', $clientId,$code,$title,$service,$deed,$status,$openedValue,$closedValue,$assignedValue,$notes,$id,$tenantId);
         $stmt->execute(); $stmt->close(); audit_log($conn,'matter.update','matters',(string)$id); json_response(['status'=>'success','id'=>$id]);
     }
     $createdBy=(int)$user['user_id'];
     $stmt=$conn->prepare('INSERT INTO matters (tenant_id,client_id,matter_code,title,service_type,deed_type,status,opened_at,closed_at,assigned_user_id,notes,created_by) VALUES (?, ?, NULLIF(?,\'\'), ?, NULLIF(?,\'\'), NULLIF(?,\'\'), ?, ?, ?, ?, NULLIF(?,\'\'), ?)');
     if(!$stmt) json_response(['status'=>'error','pesan'=>'Layanan perkara tidak tersedia'],500);
-    $stmt->bind_param('iisssssssssi',$tenantId,$clientId,$code,$title,$service,$deed,$status,$openedValue,$closedValue,$assignedValue,$notes,$createdBy);
+    $stmt->bind_param('iisssssssisi',$tenantId,$clientId,$code,$title,$service,$deed,$status,$openedValue,$closedValue,$assignedValue,$notes,$createdBy);
     $stmt->execute(); $newId=$conn->insert_id; $stmt->close(); audit_log($conn,'matter.create','matters',(string)$newId); json_response(['status'=>'success','id'=>$newId]);
 }
 
