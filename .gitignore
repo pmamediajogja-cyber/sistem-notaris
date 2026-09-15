@@ -1,0 +1,24 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local configuration
+config/local.php
+config/database.local.php
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Logs / runtime
+*.log
+storage/logs/
+
+# Local uploads / generated artifacts
+storage/uploads/
+backup/
+*.sql.gz
