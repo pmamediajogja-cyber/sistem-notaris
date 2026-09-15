@@ -3,13 +3,14 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config/tenant.php';
 require_once __DIR__ . '/config/audit.php';
+require_once __DIR__ . '/config/api_guard.php';
 require_once __DIR__ . '/koneksi.php';
 
 $conn = $koneksi;
 security_headers();
-$user = require_tenant_user();
-$tenantId = tenant_id_from_user($user);
 $action = $_GET['action'] ?? 'list';
+$user = api_guard($action !== 'list');
+$tenantId = tenant_id_from_user($user);
 
 if ($action === 'list') {
     $stmt = $conn->prepare('SELECT m.id, m.client_id, m.matter_code, m.title, m.service_type, m.deed_type, m.status, m.opened_at, m.closed_at, m.assigned_user_id, m.notes, m.created_at, m.updated_at, c.name AS client_name FROM matters m INNER JOIN clients c ON c.tenant_id = m.tenant_id AND c.id = m.client_id WHERE m.tenant_id = ? ORDER BY m.updated_at DESC LIMIT 500');
@@ -20,7 +21,6 @@ if ($action === 'list') {
 }
 
 if ($action === 'save') {
-    require_post(); require_csrf();
     $data=json_decode(file_get_contents('php://input'),true);
     if(!is_array($data)) json_response(['status'=>'error','pesan'=>'Data perkara tidak valid'],422);
     $id=isset($data['id'])&&is_numeric($data['id'])?(int)$data['id']:0;
@@ -65,7 +65,7 @@ if ($action === 'save') {
 }
 
 if($action==='delete'){
-    require_post(); require_csrf(); $id=filter_input(INPUT_POST,'id',FILTER_VALIDATE_INT);
+    $id=filter_input(INPUT_POST,'id',FILTER_VALIDATE_INT);
     if(!$id||$id<1) json_response(['status'=>'error','pesan'=>'ID perkara tidak valid'],422);
     $stmt=$conn->prepare('UPDATE matters SET status=\'closed\', closed_at=COALESCE(closed_at,CURRENT_DATE) WHERE id=? AND tenant_id=?');
     if(!$stmt) json_response(['status'=>'error','pesan'=>'Layanan perkara tidak tersedia'],500);
