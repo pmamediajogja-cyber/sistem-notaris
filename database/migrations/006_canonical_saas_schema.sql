@@ -1,6 +1,7 @@
 -- Phase 2B: canonical SaaS business schema.
 -- This is additive and intentionally independent from legacy business tables.
 -- Do not import legacy rows here until an explicit tenant mapping exists.
+-- Composite parent/child keys prevent cross-tenant relationships at DB level.
 
 CREATE TABLE IF NOT EXISTS clients (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -18,6 +19,7 @@ CREATE TABLE IF NOT EXISTS clients (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_clients_tenant_code (tenant_id, client_code),
+    UNIQUE KEY uq_clients_tenant_id (tenant_id, id),
     KEY idx_clients_tenant_name (tenant_id, name),
     CONSTRAINT fk_clients_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id),
     CONSTRAINT fk_clients_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
@@ -40,10 +42,11 @@ CREATE TABLE IF NOT EXISTS matters (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_matters_tenant_code (tenant_id, matter_code),
+    UNIQUE KEY uq_matters_tenant_id (tenant_id, id),
     KEY idx_matters_tenant_status (tenant_id, status),
-    KEY idx_matters_client (client_id),
+    KEY idx_matters_client (tenant_id, client_id),
     CONSTRAINT fk_matters_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id),
-    CONSTRAINT fk_matters_client FOREIGN KEY (client_id) REFERENCES clients(id),
+    CONSTRAINT fk_matters_client FOREIGN KEY (tenant_id, client_id) REFERENCES clients(tenant_id, id),
     CONSTRAINT fk_matters_assigned_user FOREIGN KEY (assigned_user_id) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT fk_matters_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -64,7 +67,7 @@ CREATE TABLE IF NOT EXISTS documents (
     KEY idx_documents_tenant_matter (tenant_id, matter_id),
     KEY idx_documents_sha256 (sha256),
     CONSTRAINT fk_documents_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id),
-    CONSTRAINT fk_documents_matter FOREIGN KEY (matter_id) REFERENCES matters(id),
+    CONSTRAINT fk_documents_matter FOREIGN KEY (tenant_id, matter_id) REFERENCES matters(tenant_id, id),
     CONSTRAINT fk_documents_uploaded_by FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -79,7 +82,7 @@ CREATE TABLE IF NOT EXISTS status_history (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_status_history_tenant_matter (tenant_id, matter_id, created_at),
     CONSTRAINT fk_status_history_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id),
-    CONSTRAINT fk_status_history_matter FOREIGN KEY (matter_id) REFERENCES matters(id),
+    CONSTRAINT fk_status_history_matter FOREIGN KEY (tenant_id, matter_id) REFERENCES matters(tenant_id, id),
     CONSTRAINT fk_status_history_changed_by FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -94,7 +97,7 @@ CREATE TABLE IF NOT EXISTS document_storage (
     UNIQUE KEY uq_document_storage_key (storage_key),
     KEY idx_document_storage_tenant (tenant_id),
     CONSTRAINT fk_document_storage_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id),
-    CONSTRAINT fk_document_storage_document FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+    CONSTRAINT fk_document_storage_document FOREIGN KEY (tenant_id, document_id) REFERENCES documents(tenant_id, id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Intentionally no FK is added to legacy tables here.
