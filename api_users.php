@@ -36,16 +36,27 @@ function management_target(mysqli $db, int $targetId, int $tenantId): array
     return $target;
 }
 
-function guard_last_manager(mysqli $db, int $tenantId, string $currentRole, string $newRole, bool $active): void
+function guard_last_manager(mysqli $db, int $tenantId, string $currentRole, string $newRole, bool $active, bool $forUpdate = false): void
 {
     if (!$active || !in_array($currentRole, ['OWNER', 'NOTARIS'], true) || in_array($newRole, ['OWNER', 'NOTARIS'], true)) return;
-    $stmt = $db->prepare("SELECT COUNT(*) total FROM users WHERE tenant_id = ? AND is_active = 1 AND role IN ('OWNER','NOTARIS')");
+    $sql = "SELECT COUNT(*) total FROM users WHERE tenant_id = ? AND is_active = 1 AND role IN ('OWNER','NOTARIS')" . ($forUpdate ? ' FOR UPDATE' : '');
+    $stmt = $db->prepare($sql);
     if (!$stmt) json_response(['status' => 'error', 'pesan' => 'Gagal memeriksa administrator aktif'], 500);
     $stmt->bind_param('i', $tenantId);
     $stmt->execute();
     $total = (int) $stmt->get_result()->fetch_assoc()['total'];
     $stmt->close();
     if ($total <= 1) json_response(['status' => 'error', 'pesan' => 'Tidak dapat menurunkan role satu-satunya OWNER/NOTARIS aktif'], 409);
+}
+
+function begin_manager_change(mysqli $db): void
+{
+    if (!$db->begin_transaction()) json_response(['status' => 'error', 'pesan' => 'Gagal memulai perubahan akses'], 500);
+}
+
+function rollback_manager_change(mysqli $db): void
+{
+    $db->rollback();
 }
 
 $action = strtolower(trim((string)($_GET['action'] ?? $_POST['action'] ?? 'list')));
@@ -98,12 +109,19 @@ if ($action === 'update') {
     $target = management_target($koneksi, (int) $targetId, $tenantId);
     if ((int) $targetId === (int) $user['user_id'] && $targetRole !== $role) json_response(['status' => 'error', 'pesan' => 'Anda tidak dapat mengubah role akun sendiri'], 403);
     if (!user_management_can_manage($user, (string) $target['role']) || !user_management_can_manage($user, $targetRole)) json_response(['status' => 'error', 'pesan' => 'Anda tidak berwenang mengubah user/role tersebut'], 403);
-    guard_last_manager($koneksi, $tenantId, (string) $target['role'], $targetRole, (bool) $target['is_active']);
+
+    $managerChange = (bool) $target['is_active'] && in_array((string) $target['role'], ['OWNER', 'NOTARIS'], true) && !in_array($targetRole, ['OWNER', 'NOTARIS'], true);
+    if ($managerChange) begin_manager_change($koneksi);
+    if ($managerChange) {
+        guard_last_manager($koneksi, $tenantId, (string) $target['role'], $targetRole, true, true);
+    }
+
     $stmt = $koneksi->prepare('UPDATE users SET name = ?, email = ?, role = ? WHERE id = ? AND tenant_id = ?');
-    if (!$stmt) json_response(['status' => 'error', 'pesan' => 'Gagal menyiapkan perubahan user'], 500);
+    if (!$stmt) { if ($managerChange) rollback_manager_change($koneksi); json_response(['status' => 'error', 'pesan' => 'Gagal menyiapkan perubahan user'], 500); }
     $stmt->bind_param('sssii', $name, $email, $targetRole, $targetId, $tenantId);
-    if (!$stmt->execute()) { $stmt->close(); json_response(['status' => 'error', 'pesan' => 'Email sudah digunakan atau perubahan gagal'], 409); }
+    if (!$stmt->execute()) { $stmt->close(); if ($managerChange) rollback_manager_change($koneksi); json_response(['status' => 'error', 'pesan' => 'Email sudah digunakan atau perubahan gagal'], 409); }
     $stmt->close();
+    if ($managerChange && !$koneksi->commit()) { $koneksi->rollback(); json_response(['status' => 'error', 'pesan' => 'Perubahan akses gagal disimpan'], 500); }
     audit_log($koneksi, 'user.update', 'users', (string) $targetId);
     json_response(['status' => 'ok', 'pesan' => 'User berhasil diperbarui']);
 }
@@ -115,13 +133,20 @@ if ($action === 'set_active') {
     $target = management_target($koneksi, (int) $targetId, $tenantId);
     if ((int) $targetId === (int) $user['user_id'] && $active === false) json_response(['status' => 'error', 'pesan' => 'Anda tidak dapat menonaktifkan akun sendiri'], 403);
     if (!user_management_can_manage($user, (string) $target['role'])) json_response(['status' => 'error', 'pesan' => 'Anda tidak berwenang mengubah status user tersebut'], 403);
-    if (!$active && in_array((string) $target['role'], ['OWNER', 'NOTARIS'], true)) guard_last_manager($koneksi, $tenantId, (string) $target['role'], 'STAFF', true);
+
+    $managerChange = !$active && in_array((string) $target['role'], ['OWNER', 'NOTARIS'], true) && (bool) $target['is_active'];
+    if ($managerChange) begin_manager_change($koneksi);
+    if ($managerChange) {
+        guard_last_manager($koneksi, $tenantId, (string) $target['role'], 'STAFF', true, true);
+    }
+
     $newValue = $active ? 1 : 0;
     $stmt = $koneksi->prepare('UPDATE users SET is_active = ? WHERE id = ? AND tenant_id = ?');
-    if (!$stmt) json_response(['status' => 'error', 'pesan' => 'Gagal menyiapkan status user'], 500);
+    if (!$stmt) { if ($managerChange) rollback_manager_change($koneksi); json_response(['status' => 'error', 'pesan' => 'Gagal menyiapkan status user'], 500); }
     $stmt->bind_param('iii', $newValue, $targetId, $tenantId);
-    if (!$stmt->execute()) { $stmt->close(); json_response(['status' => 'error', 'pesan' => 'Gagal mengubah status user'], 500); }
+    if (!$stmt->execute()) { $stmt->close(); if ($managerChange) rollback_manager_change($koneksi); json_response(['status' => 'error', 'pesan' => 'Gagal mengubah status user'], 500); }
     $stmt->close();
+    if ($managerChange && !$koneksi->commit()) { $koneksi->rollback(); json_response(['status' => 'error', 'pesan' => 'Perubahan akses gagal disimpan'], 500); }
     audit_log($koneksi, $active ? 'user.activate' : 'user.deactivate', 'users', (string) $targetId);
     json_response(['status' => 'ok', 'pesan' => $active ? 'User diaktifkan' : 'User dinonaktifkan']);
 }
