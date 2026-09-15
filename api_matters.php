@@ -30,22 +30,35 @@ if ($action === 'save') {
     $status=trim((string)($data['status']??'open')); $opened=trim((string)($data['opened_at']??''));
     $closed=trim((string)($data['closed_at']??'')); $assigned=isset($data['assigned_user_id'])&&is_numeric($data['assigned_user_id'])?(int)$data['assigned_user_id']:0;
     $notes=trim((string)($data['notes']??''));
-    if($clientId<1||$title===''||mb_strlen($code)>50||mb_strlen($title)>255||mb_strlen($service)>100||mb_strlen($deed)>100||mb_strlen($status)>30||mb_strlen($opened)>10||mb_strlen($closed)>10||mb_strlen($notes)>10000) json_response(['status'=>'error','pesan'=>'Data perkara tidak valid atau terlalu panjang'],422);
+    $allowedStatuses=['open','in_progress','pending','closed','cancelled'];
+    if($clientId<1||$title===''||mb_strlen($code)>50||mb_strlen($title)>255||mb_strlen($service)>100||mb_strlen($deed)>100||mb_strlen($status)>30||mb_strlen($opened)>10||mb_strlen($closed)>10||mb_strlen($notes)>10000||!in_array($status,$allowedStatuses,true)) json_response(['status'=>'error','pesan'=>'Data perkara tidak valid atau terlalu panjang'],422);
+    if($opened!==''&&!preg_match('/^\d{4}-\d{2}-\d{2}$/',$opened)) json_response(['status'=>'error','pesan'=>'Tanggal buka perkara tidak valid'],422);
+    if($closed!==''&&!preg_match('/^\d{4}-\d{2}-\d{2}$/',$closed)) json_response(['status'=>'error','pesan'=>'Tanggal tutup perkara tidak valid'],422);
 
     $check=$conn->prepare('SELECT id FROM clients WHERE id=? AND tenant_id=? LIMIT 1');
     if(!$check) json_response(['status'=>'error','pesan'=>'Layanan perkara tidak tersedia'],500);
     $check->bind_param('ii',$clientId,$tenantId); $check->execute(); $exists=$check->get_result()->fetch_assoc(); $check->close();
     if(!$exists) json_response(['status'=>'error','pesan'=>'Klien tidak ditemukan'],404);
 
-    $assignedValue=$assigned>0?$assigned:null; $openedValue=$opened!==''?$opened:null; $closedValue=$closed!==''?$closed:null;
+    $assignedValue=$assigned>0?$assigned:null;
+    if($assignedValue!==null){
+        $assignedCheck=$conn->prepare("SELECT id FROM users WHERE id=? AND tenant_id=? AND is_active=1 AND role <> 'SUPER_ADMIN' LIMIT 1");
+        if(!$assignedCheck) json_response(['status'=>'error','pesan'=>'Layanan perkara tidak tersedia'],500);
+        $assignedCheck->bind_param('ii',$assignedValue,$tenantId); $assignedCheck->execute(); $assignedExists=$assignedCheck->get_result()->fetch_assoc(); $assignedCheck->close();
+        if(!$assignedExists) json_response(['status'=>'error','pesan'=>'Petugas perkara tidak valid'],422);
+    }
+
+    $openedValue=$opened!==''?$opened:null; $closedValue=$closed!==''?$closed:null;
     if($id>0){
-        $stmt=$conn->prepare('UPDATE matters SET client_id=?, matter_code=NULLIF(?,\'\'), title=?, service_type=NULLIF(?,\'\'), deed_type=NULLIF(?,\'\'), status=?, opened_at=?, closed_at=?, assigned_user_id=?, notes=NULLIF(?,\'\') WHERE id=? AND tenant_id=?');
+        $stmt=$conn->prepare('UPDATE matters SET client_id=?, matter_code=NULLIF(?,' . "''" . '), title=?, service_type=NULLIF(?,' . "''" . '), deed_type=NULLIF(?,' . "''" . '), status=?, opened_at=?, closed_at=?, assigned_user_id=?, notes=NULLIF(?,' . "''" . ') WHERE id=? AND tenant_id=?');
         if(!$stmt) json_response(['status'=>'error','pesan'=>'Layanan perkara tidak tersedia'],500);
         $stmt->bind_param('issssssisis', $clientId,$code,$title,$service,$deed,$status,$openedValue,$closedValue,$assignedValue,$notes,$id,$tenantId);
-        $stmt->execute(); $stmt->close(); audit_log($conn,'matter.update','matters',(string)$id); json_response(['status'=>'success','id'=>$id]);
+        $stmt->execute(); $affected=$stmt->affected_rows; $stmt->close();
+        if($affected<0) json_response(['status'=>'error','pesan'=>'Gagal menyimpan perkara'],500);
+        audit_log($conn,'matter.update','matters',(string)$id); json_response(['status'=>'success','id'=>$id]);
     }
     $createdBy=(int)$user['user_id'];
-    $stmt=$conn->prepare('INSERT INTO matters (tenant_id,client_id,matter_code,title,service_type,deed_type,status,opened_at,closed_at,assigned_user_id,notes,created_by) VALUES (?, ?, NULLIF(?,\'\'), ?, NULLIF(?,\'\'), NULLIF(?,\'\'), ?, ?, ?, ?, NULLIF(?,\'\'), ?)');
+    $stmt=$conn->prepare('INSERT INTO matters (tenant_id,client_id,matter_code,title,service_type,deed_type,status,opened_at,closed_at,assigned_user_id,notes,created_by) VALUES (?, ?, NULLIF(?, ' . "''" . '), ?, NULLIF(?, ' . "''" . '), NULLIF(?, ' . "''" . '), ?, ?, ?, ?, NULLIF(?, ' . "''" . '), ?)');
     if(!$stmt) json_response(['status'=>'error','pesan'=>'Layanan perkara tidak tersedia'],500);
     $stmt->bind_param('iisssssssisi',$tenantId,$clientId,$code,$title,$service,$deed,$status,$openedValue,$closedValue,$assignedValue,$notes,$createdBy);
     $stmt->execute(); $newId=$conn->insert_id; $stmt->close(); audit_log($conn,'matter.create','matters',(string)$newId); json_response(['status'=>'success','id'=>$newId]);
@@ -56,6 +69,8 @@ if($action==='delete'){
     if(!$id||$id<1) json_response(['status'=>'error','pesan'=>'ID perkara tidak valid'],422);
     $stmt=$conn->prepare('UPDATE matters SET status=\'closed\', closed_at=COALESCE(closed_at,CURRENT_DATE) WHERE id=? AND tenant_id=?');
     if(!$stmt) json_response(['status'=>'error','pesan'=>'Layanan perkara tidak tersedia'],500);
-    $stmt->bind_param('ii',$id,$tenantId); $stmt->execute(); $stmt->close(); audit_log($conn,'matter.close','matters',(string)$id); json_response(['status'=>'success']);
+    $stmt->bind_param('ii',$id,$tenantId); $stmt->execute(); $affected=$stmt->affected_rows; $stmt->close();
+    if($affected<0) json_response(['status'=>'error','pesan'=>'Gagal menutup perkara'],500);
+    audit_log($conn,'matter.close','matters',(string)$id); json_response(['status'=>'success']);
 }
 json_response(['status'=>'error','pesan'=>'Aksi tidak dikenal'],400);
