@@ -6,6 +6,7 @@ require_once __DIR__ . '/config/tenant.php';
 require_once __DIR__ . '/config/api_guard.php';
 require_once __DIR__ . '/config/audit.php';
 
+$user = api_guard(false);
 $user = require_tenant_user();
 $tenantId = tenant_id_from_user($user);
 $role = (string) ($user['role'] ?? '');
@@ -39,12 +40,13 @@ function management_target(mysqli $db, int $targetId, int $tenantId): array
 function guard_last_manager(mysqli $db, int $tenantId, string $currentRole, string $newRole, bool $active, bool $forUpdate = false): void
 {
     if (!$active || !in_array($currentRole, ['OWNER', 'NOTARIS'], true) || in_array($newRole, ['OWNER', 'NOTARIS'], true)) return;
-    $sql = "SELECT COUNT(*) total FROM users WHERE tenant_id = ? AND is_active = 1 AND role IN ('OWNER','NOTARIS')" . ($forUpdate ? ' FOR UPDATE' : '');
+    $sql = "SELECT id FROM users WHERE tenant_id = ? AND is_active = 1 AND role IN ('OWNER','NOTARIS') ORDER BY id ASC LIMIT 2" . ($forUpdate ? ' FOR UPDATE' : '');
     $stmt = $db->prepare($sql);
     if (!$stmt) json_response(['status' => 'error', 'pesan' => 'Gagal memeriksa administrator aktif'], 500);
     $stmt->bind_param('i', $tenantId);
     $stmt->execute();
-    $total = (int) $stmt->get_result()->fetch_assoc()['total'];
+    $result = $stmt->get_result();
+    $total = $result->num_rows;
     $stmt->close();
     if ($total <= 1) json_response(['status' => 'error', 'pesan' => 'Tidak dapat menurunkan role satu-satunya OWNER/NOTARIS aktif'], 409);
 }
@@ -112,9 +114,7 @@ if ($action === 'update') {
 
     $managerChange = (bool) $target['is_active'] && in_array((string) $target['role'], ['OWNER', 'NOTARIS'], true) && !in_array($targetRole, ['OWNER', 'NOTARIS'], true);
     if ($managerChange) begin_manager_change($koneksi);
-    if ($managerChange) {
-        guard_last_manager($koneksi, $tenantId, (string) $target['role'], $targetRole, true, true);
-    }
+    if ($managerChange) guard_last_manager($koneksi, $tenantId, (string) $target['role'], $targetRole, true, true);
 
     $stmt = $koneksi->prepare('UPDATE users SET name = ?, email = ?, role = ? WHERE id = ? AND tenant_id = ?');
     if (!$stmt) { if ($managerChange) rollback_manager_change($koneksi); json_response(['status' => 'error', 'pesan' => 'Gagal menyiapkan perubahan user'], 500); }
@@ -136,9 +136,7 @@ if ($action === 'set_active') {
 
     $managerChange = !$active && in_array((string) $target['role'], ['OWNER', 'NOTARIS'], true) && (bool) $target['is_active'];
     if ($managerChange) begin_manager_change($koneksi);
-    if ($managerChange) {
-        guard_last_manager($koneksi, $tenantId, (string) $target['role'], 'STAFF', true, true);
-    }
+    if ($managerChange) guard_last_manager($koneksi, $tenantId, (string) $target['role'], 'STAFF', true, true);
 
     $newValue = $active ? 1 : 0;
     $stmt = $koneksi->prepare('UPDATE users SET is_active = ? WHERE id = ? AND tenant_id = ?');
