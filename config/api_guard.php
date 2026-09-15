@@ -4,10 +4,40 @@ declare(strict_types=1);
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/database.php';
 
+function apply_cors_headers(): void
+{
+    $origin = env_value('ALLOWED_ORIGIN');
+    $requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if (!$origin || $requestOrigin === '' || !hash_equals($origin, $requestOrigin)) return;
+
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Access-Control-Allow-Credentials: true');
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, X-CSRF-Token');
+    header('Vary: Origin');
+}
+
+function handle_cors_preflight(): void
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'OPTIONS') return;
+
+    $origin = env_value('ALLOWED_ORIGIN');
+    $requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if (!$origin || $requestOrigin === '' || !hash_equals($origin, $requestOrigin)) {
+        json_response(['status' => 'error', 'pesan' => 'Origin tidak diizinkan'], 403);
+    }
+
+    apply_cors_headers();
+    http_response_code(204);
+    exit;
+}
+
 function api_guard(bool $write = false): array
 {
     global $koneksi;
 
+    handle_cors_preflight();
+    apply_cors_headers();
     $user = require_auth();
 
     // A session must not remain usable after the account is deactivated.
@@ -35,16 +65,6 @@ function api_guard(bool $write = false): array
     if ($write) {
         require_post();
         require_csrf();
-    }
-
-    $origin = env_value('ALLOWED_ORIGIN');
-    if ($origin) {
-        $requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
-        if ($requestOrigin !== '' && hash_equals($origin, $requestOrigin)) {
-            header('Access-Control-Allow-Origin: ' . $origin);
-            header('Vary: Origin');
-            header('Access-Control-Allow-Credentials: true');
-        }
     }
 
     return $user;
