@@ -50,6 +50,37 @@ if ($action === 'list') {
     json_response(['status' => 'success', 'data' => $rows]);
 }
 
+if ($action === 'detail') {
+    $receiptId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+    if (!$receiptId || $receiptId < 1) json_response(['status' => 'error', 'pesan' => 'ID tanda terima tidak valid'], 422);
+
+    $stmt = $conn->prepare(
+        'SELECT r.id, r.matter_id, r.direction, r.counterparty_name, r.receipt_date, r.staff_name, r.created_at,
+                m.matter_code, m.title
+         FROM document_receipts r
+         INNER JOIN matters m ON m.tenant_id = r.tenant_id AND m.id = r.matter_id
+         WHERE r.id = ? AND r.tenant_id = ? LIMIT 1'
+    );
+    if (!$stmt) json_response(['status' => 'error', 'pesan' => 'Layanan tanda terima tidak tersedia'], 500);
+    $stmt->bind_param('ii', $receiptId, $tenantId);
+    $stmt->execute();
+    $receipt = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$receipt) json_response(['status' => 'error', 'pesan' => 'Tanda terima tidak ditemukan'], 404);
+
+    $itemStmt = $conn->prepare('SELECT id, description, quantity FROM document_receipt_items WHERE receipt_id = ? AND tenant_id = ? ORDER BY id ASC');
+    if (!$itemStmt) json_response(['status' => 'error', 'pesan' => 'Layanan item tanda terima tidak tersedia'], 500);
+    $itemStmt->bind_param('ii', $receiptId, $tenantId);
+    $itemStmt->execute();
+    $result = $itemStmt->get_result();
+    $items = [];
+    while ($item = $result->fetch_assoc()) $items[] = $item;
+    $itemStmt->close();
+
+    $receipt['items'] = $items;
+    json_response(['status' => 'success', 'data' => $receipt]);
+}
+
 if ($action === 'create') {
     $matterId = filter_input(INPUT_POST, 'matter_id', FILTER_VALIDATE_INT);
     $direction = trim((string)($_POST['direction'] ?? ''));
@@ -78,35 +109,22 @@ if ($action === 'create') {
 
     $conn->begin_transaction();
     try {
-        $stmt = $conn->prepare(
-            'INSERT INTO document_receipts (tenant_id, matter_id, direction, counterparty_name, receipt_date, staff_name, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
-        );
+        $stmt = $conn->prepare('INSERT INTO document_receipts (tenant_id, matter_id, direction, counterparty_name, receipt_date, staff_name, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)');
         if (!$stmt) throw new RuntimeException('receipt_prepare');
         $stmt->bind_param('iissssi', $tenantId, $matterId, $direction, $counterparty, $receiptDate, $staffValue, $createdBy);
-        if (!$stmt->execute()) {
-            $stmt->close();
-            throw new RuntimeException('receipt_insert');
-        }
+        if (!$stmt->execute()) { $stmt->close(); throw new RuntimeException('receipt_insert'); }
         $receiptId = (int)$conn->insert_id;
         $stmt->close();
 
-        $itemStmt = $conn->prepare(
-            'INSERT INTO document_receipt_items (tenant_id, receipt_id, description, quantity) VALUES (?, ?, ?, ?)'
-        );
+        $itemStmt = $conn->prepare('INSERT INTO document_receipt_items (tenant_id, receipt_id, description, quantity) VALUES (?, ?, ?, ?)');
         if (!$itemStmt) throw new RuntimeException('item_prepare');
-
         foreach ($items as $item) {
             $description = trim((string)$item['description']);
             $quantity = (int)$item['quantity'];
             $itemStmt->bind_param('iisi', $tenantId, $receiptId, $description, $quantity);
-            if (!$itemStmt->execute()) {
-                $itemStmt->close();
-                throw new RuntimeException('item_insert');
-            }
+            if (!$itemStmt->execute()) { $itemStmt->close(); throw new RuntimeException('item_insert'); }
         }
         $itemStmt->close();
-
         $conn->commit();
     } catch (Throwable $e) {
         $conn->rollback();
