@@ -83,6 +83,19 @@ if ($action === 'save') {
     $id = isset($data['id']) && is_numeric($data['id']) ? (int) $data['id'] : 0;
 
     if ($id > 0) {
+        $exists = $conn->prepare('SELECT id FROM tabel_invoice WHERE id = ? AND tenant_id = ? LIMIT 1');
+        if (!$exists) {
+            json_response(['status' => 'error', 'pesan' => 'Layanan invoice tidak tersedia'], 500);
+        }
+        $exists->bind_param('ii', $id, $tenantId);
+        $exists->execute();
+        $found = $exists->get_result()->num_rows === 1;
+        $exists->close();
+
+        if (!$found) {
+            json_response(['status' => 'error', 'pesan' => 'Invoice tidak ditemukan atau bukan milik kantor ini'], 404);
+        }
+
         $stmt = $conn->prepare(
             'UPDATE tabel_invoice
              SET no_invoice = ?, nama_pihak = ?, data_json = ?
@@ -93,13 +106,8 @@ if ($action === 'save') {
         }
         $stmt->bind_param('sssii', $noInvoice, $namaPihak, $dataJson, $id, $tenantId);
         $stmt->execute();
-
-        if ($stmt->affected_rows === 0) {
-            $stmt->close();
-            json_response(['status' => 'error', 'pesan' => 'Invoice tidak ditemukan atau bukan milik kantor ini'], 404);
-        }
-
         $stmt->close();
+
         audit_log($conn, 'invoice.update', 'invoice', (string) $id);
         json_response(['status' => 'success', 'id' => $id]);
     }
