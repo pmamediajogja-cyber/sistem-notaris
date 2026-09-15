@@ -2,16 +2,17 @@
 declare(strict_types=1);
 
 /**
- * Phase 2B staging-only tenant isolation smoke test.
+ * Phase 2B/2D staging-only tenant isolation smoke test.
  *
  * Required environment variables:
  * BASE_URL, TENANT_A_EMAIL, TENANT_A_PASSWORD,
- * TENANT_B_CLIENT_ID, TENANT_B_MATTER_ID, TENANT_B_DOCUMENT_ID.
+ * TENANT_B_CLIENT_ID, TENANT_B_MATTER_ID, TENANT_B_DOCUMENT_ID,
+ * TENANT_B_USER_ID.
  *
  * Never run against production or with real client credentials/documents.
  */
 
-$required = ['BASE_URL','TENANT_A_EMAIL','TENANT_A_PASSWORD','TENANT_B_CLIENT_ID','TENANT_B_MATTER_ID','TENANT_B_DOCUMENT_ID'];
+$required = ['BASE_URL','TENANT_A_EMAIL','TENANT_A_PASSWORD','TENANT_B_CLIENT_ID','TENANT_B_MATTER_ID','TENANT_B_DOCUMENT_ID','TENANT_B_USER_ID'];
 foreach ($required as $key) {
     if (getenv($key) === false || getenv($key) === '') {
         fwrite(STDERR, "Missing environment variable: {$key}\n");
@@ -81,6 +82,7 @@ $csrf = login($base, (string)getenv('TENANT_A_EMAIL'), (string)getenv('TENANT_A_
 $bClient = (int)getenv('TENANT_B_CLIENT_ID');
 $bMatter = (int)getenv('TENANT_B_MATTER_ID');
 $bDocument = (int)getenv('TENANT_B_DOCUMENT_ID');
+$bUser = (int)getenv('TENANT_B_USER_ID');
 
 [$status, , $body] = request($base.'/api_clients.php?action=list');
 $data = json_decode($body, true);
@@ -88,21 +90,41 @@ $ids = is_array($data) ? array_map('intval', array_column($data, 'id')) : [];
 assertTrue($status === 200 && !in_array($bClient, $ids, true), 'Tenant A cannot list Tenant B client');
 
 $matterPayload = json_encode(['id'=>$bMatter,'client_id'=>$bClient,'title'=>'FORGED CROSS TENANT','status'=>'open']);
-[$status] = request($base.'/api_matters.php?action=save', 'POST', ['Content-Type: application/json','X-CSRF-Token: '.$csrf], $matterPayload);
+[$status] = request($base.'/api_matters.php?action=save', 'POST', ['Content-Type'=>'application/json','X-CSRF-Token: '.$csrf], $matterPayload);
 assertTrue($status >= 400 && $status < 500, 'Tenant A cannot update Tenant B matter');
 
-[$status] = request($base.'/api_clients.php?action=delete', 'POST', ['Content-Type: application/x-www-form-urlencoded','X-CSRF-Token: '.$csrf], http_build_query(['id'=>$bClient]));
+[$status] = request($base.'/api_clients.php?action=delete', 'POST', ['Content-Type'=>'application/x-www-form-urlencoded','X-CSRF-Token: '.$csrf], http_build_query(['id'=>$bClient]));
 assertTrue($status >= 400 && $status < 500, 'Tenant A cannot deactivate Tenant B client');
 
 [$status, , $body] = request($base.'/api_documents.php?action=list&matter_id='.$bMatter);
 $data = json_decode($body, true);
 assertTrue($status === 404 || $status === 200 && $data === [], 'Tenant A cannot list Tenant B documents');
 
-[$status] = request($base.'/api_documents.php?action=delete', 'POST', ['Content-Type: application/x-www-form-urlencoded','X-CSRF-Token: '.$csrf], http_build_query(['id'=>$bDocument]));
+[$status] = request($base.'/api_documents.php?action=delete', 'POST', ['Content-Type'=>'application/x-www-form-urlencoded','X-CSRF-Token: '.$csrf], http_build_query(['id'=>$bDocument]));
 assertTrue($status >= 400 && $status < 500, 'Tenant A cannot delete Tenant B document');
 
 [$status] = request($base.'/api_status_history.php?action=list&matter_id='.$bMatter);
 assertTrue($status >= 400 && $status < 500, 'Tenant A cannot read Tenant B status history');
+
+[$status] = request($base.'/api_users.php?action=update', 'POST', ['Content-Type'=>'application/x-www-form-urlencoded','X-CSRF-Token: '.$csrf], http_build_query([
+    'user_id'=>$bUser,
+    'name'=>'Cross Tenant Attempt',
+    'email'=>'cross-tenant@example.invalid',
+    'role'=>'STAFF',
+]));
+assertTrue($status >= 400 && $status < 500, 'Tenant A cannot update Tenant B user');
+
+[$status] = request($base.'/api_users.php?action=set_active', 'POST', ['Content-Type'=>'application/x-www-form-urlencoded','X-CSRF-Token: '.$csrf], http_build_query([
+    'user_id'=>$bUser,
+    'is_active'=>'0',
+]));
+assertTrue($status >= 400 && $status < 500, 'Tenant A cannot deactivate Tenant B user');
+
+[$status] = request($base.'/api_users.php?action=reset_password', 'POST', ['Content-Type'=>'application/x-www-form-urlencoded','X-CSRF-Token: '.$csrf], http_build_query([
+    'user_id'=>$bUser,
+    'password'=>'ThisMustNotChange123!',
+]));
+assertTrue($status >= 400 && $status < 500, 'Tenant A cannot reset Tenant B user password');
 
 if ($failed) {
     fwrite(STDERR, "\nSecurity smoke test FAILED. Do not promote this build.\n");
