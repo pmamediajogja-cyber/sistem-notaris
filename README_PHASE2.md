@@ -9,6 +9,7 @@ Move the legacy office workflows toward safe multi-tenant access without guessin
 ## Implemented
 
 - Added `005_phase2_business_isolation.sql` as a controlled schema-preparation migration.
+- Added `006_canonical_saas_schema.sql` for the canonical SaaS business model.
 - Agenda API requires an authenticated tenant user and scopes reads/writes by `tenant_id`.
 - Agenda writes use a tenant-scoped transaction; there is no global `TRUNCATE`.
 - Pelacakan API requires an authenticated tenant user and scopes reads, writes, deletes, and locks by `tenant_id`.
@@ -18,6 +19,7 @@ Move the legacy office workflows toward safe multi-tenant access without guessin
 - Business mutations create audit-log entries.
 - Phase 2A.2 completed the legacy workflow/data-boundary audit in `docs/PHASE2A2_AUDIT.md`.
 - Repository ignore rules were restored to a conventional root `.gitignore`.
+- Legacy Dian/VIP API and database connector were removed from the SaaS branch.
 
 ## Phase 2A.2 conclusions
 
@@ -25,16 +27,30 @@ Move the legacy office workflows toward safe multi-tenant access without guessin
 - Agenda requires a surrogate `agenda_id` because the legacy primary key was `tanggal`.
 - The current `akta.html` is a client-side DOCX proofreader, not evidence of a persistent `akta` database table.
 - `foto_patok/*` must not become shared SaaS private storage; future uploads require tenant-scoped storage metadata and authorization.
-- `api_pelacakan_dian.php` and `koneksi_dian.php` remain outside the SaaS path until a separate VIP migration is designed and tested.
-- The long-term SaaS business model should be canonical `clients -> matters/cases -> documents`, with invoices and status history linked to the case/client, instead of exposing unknown legacy tables directly.
+- The old Dian/VIP path is not part of the SaaS architecture and has been removed from this branch.
+- The long-term SaaS business model is canonical `clients -> matters/cases -> documents`, with invoices and status history linked to the case/client, instead of exposing unknown legacy tables directly.
+
+## Phase 2B
+
+The canonical schema is additive and lives in `database/migrations/006_canonical_saas_schema.sql`.
+
+Core tables:
+
+- `clients`
+- `matters`
+- `documents`
+- `status_history`
+- `document_storage`
+
+The schema enforces tenant ownership with foreign keys. It does not import legacy data or infer ownership. Legacy-to-canonical import remains a separate, auditable step.
 
 ## Not yet safe to deploy
 
 1. Existing legacy records still need an explicit tenant mapping before final constraints are applied.
-2. `tenant_id` remains nullable until mapping is verified.
+2. Legacy `tenant_id` fields remain nullable until mapping is verified.
 3. Do not run tenant schema migrations against production blindly.
 4. Frontends calling changed endpoints must use the authenticated session and CSRF token.
-5. Foreign keys and `NOT NULL` constraints should be added only after data mapping/validation.
+5. Legacy-to-canonical imports require an explicit mapping and validation.
 6. Document uploads require tenant-scoped storage and authorization before SaaS production.
 
 ## Rollout order
@@ -45,7 +61,8 @@ Move the legacy office workflows toward safe multi-tenant access without guessin
 4. Create/verify tenant records.
 5. Backfill `tenant_id` only from an auditable mapping.
 6. Validate zero unexpected NULL tenant IDs.
-7. Apply final `NOT NULL` + foreign-key constraints.
-8. Switch frontend calls to authenticated tenant APIs.
-9. Test cross-tenant access explicitly.
-10. Only then consider merging into `main`.
+7. Apply final `NOT NULL` + foreign-key constraints where appropriate.
+8. Build and test canonical SaaS CRUD.
+9. Switch frontend calls to authenticated tenant APIs.
+10. Test cross-tenant access explicitly.
+11. Only then consider merging into `main`.
