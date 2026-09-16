@@ -20,7 +20,6 @@ function invoice_items_normalize(mixed $items): ?array {
         $description = trim((string)($item['description'] ?? ''));
         $amount = invoice_money($item['amount'] ?? 0);
         $distribution = (string)($item['distribution'] ?? 'kosong');
-        // Blank zero-value rows are UI placeholders and should not become DB rows.
         if ($description === '' && $amount === 0) continue;
         if ($description === '' || mb_strlen($description) > 500 || !in_array($distribution, ['kosong','bagi2','pembeli','penjual'], true)) return null;
         $normalized[] = ['description' => $description, 'amount' => $amount, 'distribution' => $distribution];
@@ -39,25 +38,48 @@ function generated_invoice_number(mysqli $conn, int $tenantId): string {
     }
     throw new RuntimeException('invoice_number_generation');
 }
+function invoice_related_ids(mysqli $conn, int $tenantId, mixed $clientRaw, mixed $matterRaw): array {
+    $clientId = ($clientRaw !== null && $clientRaw !== '' && is_numeric($clientRaw)) ? (int)$clientRaw : null;
+    $matterId = ($matterRaw !== null && $matterRaw !== '' && is_numeric($matterRaw)) ? (int)$matterRaw : null;
+    if (($clientId !== null && $clientId < 1) || ($matterId !== null && $matterId < 1)) {
+        json_response(['status'=>'error','pesan'=>'Referensi klien atau perkara tidak valid'],422);
+    }
+    if ($clientId !== null) {
+        $stmt = $conn->prepare('SELECT id FROM clients WHERE id = ? AND tenant_id = ? LIMIT 1');
+        if (!$stmt) json_response(['status'=>'error','pesan'=>'Layanan klien tidak tersedia'],500);
+        $stmt->bind_param('ii', $clientId, $tenantId); $stmt->execute(); $found = $stmt->get_result()->fetch_assoc(); $stmt->close();
+        if (!$found) json_response(['status'=>'error','pesan'=>'Klien tidak ditemukan atau bukan milik kantor ini'],404);
+    }
+    if ($matterId !== null) {
+        $stmt = $conn->prepare('SELECT id, client_id FROM matters WHERE id = ? AND tenant_id = ? LIMIT 1');
+        if (!$stmt) json_response(['status'=>'error','pesan'=>'Layanan perkara tidak tersedia'],500);
+        $stmt->bind_param('ii', $matterId, $tenantId); $stmt->execute(); $matter = $stmt->get_result()->fetch_assoc(); $stmt->close();
+        if (!$matter) json_response(['status'=>'error','pesan'=>'Perkara tidak ditemukan atau bukan milik kantor ini'],404);
+        $matterClientId = (int)$matter['client_id'];
+        if ($clientId !== null && $clientId !== $matterClientId) json_response(['status'=>'error','pesan'=>'Klien tidak sesuai dengan perkara yang dipilih'],422);
+        if ($clientId === null) $clientId = $matterClientId;
+    }
+    return [$clientId, $matterId];
+}
 
 if ($action === 'list') {
-    $stmt = $conn->prepare('SELECT id, invoice_number, service_mode, invoice_date, property_reference, seller_name, buyer_name, real_transaction_amount, tax_base_amount, npoptkp_amount, burden_mode, created_at, updated_at FROM invoices WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT 500');
+    $stmt = $conn->prepare('SELECT i.id, i.invoice_number, i.service_mode, i.invoice_date, i.property_reference, i.area_m2, i.client_id, c.name AS client_name, i.matter_id, m.matter_code, m.title AS matter_title, i.seller_name, i.buyer_name, i.real_transaction_amount, i.tax_base_amount, i.npoptkp_amount, i.burden_mode, i.created_at, i.updated_at FROM invoices i LEFT JOIN clients c ON c.tenant_id = i.tenant_id AND c.id = i.client_id LEFT JOIN matters m ON m.tenant_id = i.tenant_id AND m.id = i.matter_id WHERE i.tenant_id = ? AND i.deleted_at IS NULL ORDER BY i.id DESC LIMIT 500');
     if (!$stmt) json_response(['status'=>'error','pesan'=>'Layanan invoice tidak tersedia'],500);
     $stmt->bind_param('i',$tenantId); $stmt->execute(); $result=$stmt->get_result(); $rows=[];
-    while($row=$result->fetch_assoc()){ $row['id']=(int)$row['id']; $row['burden_mode']=(bool)$row['burden_mode']; $rows[]=$row; }
+    while($row=$result->fetch_assoc()){ $row['id']=(int)$row['id']; $row['client_id']=$row['client_id']!==null?(int)$row['client_id']:null; $row['matter_id']=$row['matter_id']!==null?(int)$row['matter_id']:null; $row['burden_mode']=(bool)$row['burden_mode']; $rows[]=$row; }
     $stmt->close(); json_response(['status'=>'success','data'=>$rows]);
 }
 
 if ($action === 'detail') {
     $id=filter_input(INPUT_GET,'id',FILTER_VALIDATE_INT); if(!$id || $id<1) json_response(['status'=>'error','pesan'=>'ID invoice tidak valid'],422);
-    $stmt=$conn->prepare('SELECT id, invoice_number, service_mode, invoice_date, property_reference, area_m2, seller_name, buyer_name, real_transaction_amount, tax_base_amount, npoptkp_amount, burden_mode, created_at, updated_at FROM invoices WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL LIMIT 1');
+    $stmt=$conn->prepare('SELECT i.id, i.invoice_number, i.service_mode, i.invoice_date, i.property_reference, i.area_m2, i.client_id, c.name AS client_name, i.matter_id, m.matter_code, m.title AS matter_title, i.seller_name, i.buyer_name, i.real_transaction_amount, i.tax_base_amount, i.npoptkp_amount, i.burden_mode, i.created_at, i.updated_at FROM invoices i LEFT JOIN clients c ON c.tenant_id = i.tenant_id AND c.id = i.client_id LEFT JOIN matters m ON m.tenant_id = i.tenant_id AND m.id = i.matter_id WHERE i.id = ? AND i.tenant_id = ? AND i.deleted_at IS NULL LIMIT 1');
     if(!$stmt) json_response(['status'=>'error','pesan'=>'Layanan invoice tidak tersedia'],500);
     $stmt->bind_param('ii',$id,$tenantId); $stmt->execute(); $invoice=$stmt->get_result()->fetch_assoc(); $stmt->close();
     if(!$invoice) json_response(['status'=>'error','pesan'=>'Invoice tidak ditemukan'],404);
     $itemStmt=$conn->prepare('SELECT id, description, amount, distribution, sort_order FROM invoice_items WHERE invoice_id = ? AND tenant_id = ? ORDER BY sort_order ASC, id ASC');
     if(!$itemStmt) json_response(['status'=>'error','pesan'=>'Layanan item invoice tidak tersedia'],500);
     $itemStmt->bind_param('ii',$id,$tenantId); $itemStmt->execute(); $result=$itemStmt->get_result(); $items=[]; while($item=$result->fetch_assoc()) $items[]=$item; $itemStmt->close();
-    $invoice['id']=(int)$invoice['id']; $invoice['burden_mode']=(bool)$invoice['burden_mode']; $invoice['items']=$items; json_response(['status'=>'success','data'=>$invoice]);
+    $invoice['id']=(int)$invoice['id']; $invoice['client_id']=$invoice['client_id']!==null?(int)$invoice['client_id']:null; $invoice['matter_id']=$invoice['matter_id']!==null?(int)$invoice['matter_id']:null; $invoice['burden_mode']=(bool)$invoice['burden_mode']; $invoice['items']=$items; json_response(['status'=>'success','data'=>$invoice]);
 }
 
 if (in_array($action,['create','update'],true)) {
@@ -68,6 +90,7 @@ if (in_array($action,['create','update'],true)) {
     $normalizedItems=invoice_items_normalize($items);
     if(!in_array($serviceMode,['AJB','UMUM'],true)||($invoiceDate!==''&&!invoice_date_valid($invoiceDate))||mb_strlen($propertyReference)>255||mb_strlen($seller)>255||mb_strlen($buyer)>255||($areaM2!==null&&$areaM2>999999999999)||$realAmount>999999999999999999||$taxBase>999999999999999999||$npoptkp>999999999999999999||$normalizedItems===null) json_response(['status'=>'error','pesan'=>'Data invoice tidak valid'],422);
     $items=$normalizedItems;
+    [$clientId, $matterId] = invoice_related_ids($conn, $tenantId, $raw['client_id'] ?? null, $raw['matter_id'] ?? null);
     $id=isset($raw['id'])&&is_numeric($raw['id'])?(int)$raw['id']:0; if($action==='update'&&$id<1) json_response(['status'=>'error','pesan'=>'ID invoice tidak valid'],422);
     if($id>0){
         $exists=$conn->prepare('SELECT id, invoice_number FROM invoices WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL LIMIT 1'); if(!$exists) json_response(['status'=>'error','pesan'=>'Layanan invoice tidak tersedia'],500);
@@ -79,12 +102,12 @@ if (in_array($action,['create','update'],true)) {
     $conn->begin_transaction();
     try {
         if($id>0){
-            $stmt=$conn->prepare('UPDATE invoices SET service_mode=?, invoice_date=?, property_reference=?, area_m2=?, seller_name=?, buyer_name=?, real_transaction_amount=?, tax_base_amount=?, npoptkp_amount=?, burden_mode=? WHERE id=? AND tenant_id=? AND deleted_at IS NULL'); if(!$stmt) throw new RuntimeException('invoice_update_prepare');
-            $stmt->bind_param('sssdssdddiii',$serviceMode,$invoiceDateValue,$propertyValue,$areaM2,$sellerValue,$buyerValue,$realAmount,$taxBase,$npoptkp,$burdenMode,$id,$tenantId); if(!$stmt->execute()){ $stmt->close(); throw new RuntimeException('invoice_update'); } $stmt->close();
+            $stmt=$conn->prepare('UPDATE invoices SET client_id=?, matter_id=?, service_mode=?, invoice_date=?, property_reference=?, area_m2=?, seller_name=?, buyer_name=?, real_transaction_amount=?, tax_base_amount=?, npoptkp_amount=?, burden_mode=? WHERE id=? AND tenant_id=? AND deleted_at IS NULL'); if(!$stmt) throw new RuntimeException('invoice_update_prepare');
+            $stmt->bind_param('iisssdssdddiii',$clientId,$matterId,$serviceMode,$invoiceDateValue,$propertyValue,$areaM2,$sellerValue,$buyerValue,$realAmount,$taxBase,$npoptkp,$burdenMode,$id,$tenantId); if(!$stmt->execute()){ $stmt->close(); throw new RuntimeException('invoice_update'); } $stmt->close();
             $deleteItems=$conn->prepare('DELETE FROM invoice_items WHERE invoice_id=? AND tenant_id=?'); if(!$deleteItems) throw new RuntimeException('invoice_items_delete_prepare'); $deleteItems->bind_param('ii',$id,$tenantId); if(!$deleteItems->execute()){ $deleteItems->close(); throw new RuntimeException('invoice_items_delete'); } $deleteItems->close(); $auditAction='invoice.update';
         } else {
-            $stmt=$conn->prepare('INSERT INTO invoices (tenant_id, invoice_number, service_mode, invoice_date, property_reference, area_m2, seller_name, buyer_name, real_transaction_amount, tax_base_amount, npoptkp_amount, burden_mode, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'); if(!$stmt) throw new RuntimeException('invoice_insert_prepare');
-            $stmt->bind_param('issssdssdddii',$tenantId,$invoiceNumber,$serviceMode,$invoiceDateValue,$propertyValue,$areaM2,$sellerValue,$buyerValue,$realAmount,$taxBase,$npoptkp,$burdenMode,$createdBy); if(!$stmt->execute()){ $stmt->close(); throw new RuntimeException('invoice_insert'); } $id=(int)$conn->insert_id; $stmt->close(); $auditAction='invoice.create';
+            $stmt=$conn->prepare('INSERT INTO invoices (tenant_id, client_id, matter_id, invoice_number, service_mode, invoice_date, property_reference, area_m2, seller_name, buyer_name, real_transaction_amount, tax_base_amount, npoptkp_amount, burden_mode, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'); if(!$stmt) throw new RuntimeException('invoice_insert_prepare');
+            $stmt->bind_param('iiissssdssdddii',$tenantId,$clientId,$matterId,$invoiceNumber,$serviceMode,$invoiceDateValue,$propertyValue,$areaM2,$sellerValue,$buyerValue,$realAmount,$taxBase,$npoptkp,$burdenMode,$createdBy); if(!$stmt->execute()){ $stmt->close(); throw new RuntimeException('invoice_insert'); } $id=(int)$conn->insert_id; $stmt->close(); $auditAction='invoice.create';
         }
         if(count($items)>0){
             $itemStmt=$conn->prepare('INSERT INTO invoice_items (tenant_id, invoice_id, description, amount, distribution, sort_order) VALUES (?, ?, ?, ?, ?, ?)'); if(!$itemStmt) throw new RuntimeException('invoice_item_prepare');
