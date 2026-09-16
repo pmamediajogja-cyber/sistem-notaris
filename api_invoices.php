@@ -12,17 +12,17 @@ $conn = $koneksi;
 
 function invoice_money(mixed $value): float { if (is_int($value) || is_float($value)) return max(0, (float)$value); $raw = preg_replace('/[^0-9]/', '', (string)$value); return $raw === '' ? 0.0 : (float)$raw; }
 function invoice_date_valid(string $date): bool { $parsed = DateTime::createFromFormat('!Y-m-d', $date); return $parsed !== false && $parsed->format('Y-m-d') === $date; }
-function invoice_items_normalize(mixed $items): array {
-    if (!is_array($items) || count($items) > 100) return [];
+function invoice_items_normalize(mixed $items): ?array {
+    if (!is_array($items) || count($items) > 100) return null;
     $normalized = [];
     foreach ($items as $item) {
-        if (!is_array($item)) return [];
+        if (!is_array($item)) return null;
         $description = trim((string)($item['description'] ?? ''));
         $amount = invoice_money($item['amount'] ?? 0);
         $distribution = (string)($item['distribution'] ?? 'kosong');
         // Blank zero-value rows are UI placeholders and should not become DB rows.
         if ($description === '' && $amount === 0) continue;
-        if ($description === '' || mb_strlen($description) > 500 || !in_array($distribution, ['kosong','bagi2','pembeli','penjual'], true)) return [];
+        if ($description === '' || mb_strlen($description) > 500 || !in_array($distribution, ['kosong','bagi2','pembeli','penjual'], true)) return null;
         $normalized[] = ['description' => $description, 'amount' => $amount, 'distribution' => $distribution];
     }
     return $normalized;
@@ -66,7 +66,7 @@ if (in_array($action,['create','update'],true)) {
     $areaM2=isset($raw['area_m2'])&&$raw['area_m2']!==''?max(0,(float)$raw['area_m2']):null; $seller=trim((string)($raw['seller_name']??'')); $buyer=trim((string)($raw['buyer_name']??''));
     $realAmount=invoice_money($raw['real_transaction_amount']??0); $taxBase=invoice_money($raw['tax_base_amount']??0); $npoptkp=invoice_money($raw['npoptkp_amount']??0); $burdenMode=!empty($raw['burden_mode'])?1:0; $items=$raw['items']??[];
     $normalizedItems=invoice_items_normalize($items);
-    if(!in_array($serviceMode,['AJB','UMUM'],true)||($invoiceDate!==''&&!invoice_date_valid($invoiceDate))||mb_strlen($propertyReference)>255||mb_strlen($seller)>255||mb_strlen($buyer)>255||($areaM2!==null&&$areaM2>999999999999)||$realAmount>999999999999999999||$taxBase>999999999999999999||$npoptkp>999999999999999999||(!is_array($items))||count($items)>100||($normalizedItems===[]&&count($items)>0)) json_response(['status'=>'error','pesan'=>'Data invoice tidak valid'],422);
+    if(!in_array($serviceMode,['AJB','UMUM'],true)||($invoiceDate!==''&&!invoice_date_valid($invoiceDate))||mb_strlen($propertyReference)>255||mb_strlen($seller)>255||mb_strlen($buyer)>255||($areaM2!==null&&$areaM2>999999999999)||$realAmount>999999999999999999||$taxBase>999999999999999999||$npoptkp>999999999999999999||$normalizedItems===null) json_response(['status'=>'error','pesan'=>'Data invoice tidak valid'],422);
     $items=$normalizedItems;
     $id=isset($raw['id'])&&is_numeric($raw['id'])?(int)$raw['id']:0; if($action==='update'&&$id<1) json_response(['status'=>'error','pesan'=>'ID invoice tidak valid'],422);
     if($id>0){
